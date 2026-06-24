@@ -190,7 +190,7 @@ Question de validation:
 
 #### Meteo actuelle
 
-L'utilisateur doit voir la meteo actuelle pour le lac ou une zone proche.
+L'utilisateur doit voir un bloc meteo base sur sa position GPS actuelle.
 
 Exigences:
 
@@ -198,11 +198,15 @@ Exigences:
 - afficher conditions principales;
 - afficher precipitation si disponible;
 - afficher heure de derniere mise a jour;
+- afficher vent, direction du vent et rafales dans le meme bloc;
+- grouper les metriques dans un rendu compact et premium;
+- permettre de masquer / afficher le bloc meteo;
+- preparer la structure pour une prevision `+1h`;
 - gerer l'indisponibilite de l'API proprement.
 
 #### Vent et rafales
 
-L'utilisateur doit voir le vent et les rafales.
+L'utilisateur doit voir le vent et les rafales dans le bloc meteo.
 
 Exigences:
 
