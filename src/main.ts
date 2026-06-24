@@ -70,6 +70,10 @@ app.innerHTML = `
     </section>
   </div>
   <button id="locateButton" class="locate-button" type="button">Activer GPS</button>
+  <div class="gps-controls" aria-label="Controle GPS carte">
+    <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
+    <button id="followGpsButton" class="gps-map-button" type="button" aria-label="Activer le suivi GPS" aria-pressed="false">◎</button>
+  </div>
   <div class="map-legend">Limite indicative 300 m</div>
   <div id="statusMessage" class="status-message" hidden></div>
 `;
@@ -91,6 +95,8 @@ const weatherGusts = document.querySelector<HTMLElement>("#weatherGusts");
 const weatherRain = document.querySelector<HTMLElement>("#weatherRain");
 const weatherUpdatedAt = document.querySelector<HTMLElement>("#weatherUpdatedAt");
 const locateButton = document.querySelector<HTMLButtonElement>("#locateButton");
+const centerGpsButton = document.querySelector<HTMLButtonElement>("#centerGpsButton");
+const followGpsButton = document.querySelector<HTMLButtonElement>("#followGpsButton");
 const statusMessage = document.querySelector<HTMLDivElement>("#statusMessage");
 
 if (
@@ -111,6 +117,8 @@ if (
   !weatherRain ||
   !weatherUpdatedAt ||
   !locateButton ||
+  !centerGpsButton ||
+  !followGpsButton ||
   !statusMessage
 ) {
   throw new Error("Missing required UI elements");
@@ -133,6 +141,8 @@ const weatherGustsEl = weatherGusts;
 const weatherRainEl = weatherRain;
 const weatherUpdatedAtEl = weatherUpdatedAt;
 const locateEl = locateButton;
+const centerGpsEl = centerGpsButton;
+const followGpsEl = followGpsButton;
 const statusEl = statusMessage;
 
 const map = new maplibregl.Map({
@@ -168,6 +178,9 @@ let weatherForecast: WeatherForecast | null = null;
 let selectedWeatherPeriod: WeatherPeriod = "now";
 let lastWeatherFetchKey: string | null = null;
 let isSpeedPanelOpen = true;
+let isGpsActive = false;
+let isFollowGpsEnabled = false;
+let isProgrammaticMapMove = false;
 
 const gpsProvider = createGpsProvider();
 
@@ -191,6 +204,46 @@ map.on("load", () => {
 });
 
 locateEl.addEventListener("click", () => {
+  startGps();
+});
+
+centerGpsEl.addEventListener("click", () => {
+  if (!isGpsActive) {
+    startGps();
+    return;
+  }
+
+  if (lastReading) {
+    centerOnGps(lastReading);
+  } else {
+    setStatus("Position GPS en attente...");
+  }
+});
+
+followGpsEl.addEventListener("click", () => {
+  if (!isGpsActive) {
+    setFollowGps(true);
+    startGps();
+    return;
+  }
+
+  setFollowGps(!isFollowGpsEnabled);
+
+  if (isFollowGpsEnabled && lastReading) {
+    centerOnGps(lastReading);
+  }
+});
+
+map.on("dragstart", disableFollowOnUserMove);
+map.on("zoomstart", disableFollowOnUserMove);
+map.on("rotatestart", disableFollowOnUserMove);
+
+function startGps() {
+  if (isGpsActive) {
+    return;
+  }
+
+  isGpsActive = true;
   locateEl.disabled = true;
   locateEl.textContent = "GPS actif";
   setStatus("Recherche de la position...");
@@ -205,10 +258,12 @@ locateEl.addEventListener("click", () => {
     (message) => {
       locateEl.disabled = false;
       locateEl.textContent = "Activer GPS";
+      isGpsActive = false;
+      setFollowGps(false);
       setStatus(message);
     }
   );
-});
+}
 
 speedToggleEl.addEventListener("click", () => {
   isSpeedPanelOpen = togglePanel(speedCardEl, speedToggleEl, "vitesse");
@@ -253,12 +308,46 @@ function renderReading(reading: GpsReading) {
   }
 
   if (!hasCenteredOnUser) {
-    map.easeTo({ center: lngLat, zoom: Math.max(map.getZoom(), 12), duration: 800 });
+    moveMapToGps(reading, { zoom: Math.max(map.getZoom(), 12), duration: 800 });
     hasCenteredOnUser = true;
+  } else if (isFollowGpsEnabled) {
+    moveMapToGps(reading, { duration: 500 });
   }
 
   if (isSpeedPanelOpen) {
     renderSpeed(reading);
+  }
+}
+
+function centerOnGps(reading: GpsReading) {
+  moveMapToGps(reading, {
+    zoom: Math.max(map.getZoom(), 12),
+    duration: 650
+  });
+}
+
+function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: number }) {
+  isProgrammaticMapMove = true;
+  map.easeTo({
+    center: [reading.longitude, reading.latitude],
+    zoom: options.zoom,
+    duration: options.duration
+  });
+  window.setTimeout(() => {
+    isProgrammaticMapMove = false;
+  }, options.duration + 80);
+}
+
+function setFollowGps(enabled: boolean) {
+  isFollowGpsEnabled = enabled;
+  followGpsEl.classList.toggle("is-active", enabled);
+  followGpsEl.setAttribute("aria-pressed", enabled ? "true" : "false");
+  followGpsEl.setAttribute("aria-label", enabled ? "Desactiver le suivi GPS" : "Activer le suivi GPS");
+}
+
+function disableFollowOnUserMove() {
+  if (!isProgrammaticMapMove && isFollowGpsEnabled) {
+    setFollowGps(false);
   }
 }
 

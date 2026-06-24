@@ -222,6 +222,34 @@ button {
   color: rgba(226, 232, 240, 0.74);
 }
 
+.gps-controls {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(178px + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+}
+
+.gps-map-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(226, 232, 240, 0.22);
+  border-radius: 8px;
+  color: #f8fafc;
+  background: rgba(7, 19, 31, 0.84);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.24);
+  backdrop-filter: blur(12px);
+  font-size: 1.22rem;
+  line-height: 1;
+}
+
+.gps-map-button.is-active {
+  color: #07131f;
+  border-color: rgba(125, 211, 252, 0.9);
+  background: #7dd3fc;
+}
+
 .map-legend {
   position: fixed;
   left: calc(16px + env(safe-area-inset-left));

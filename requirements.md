@@ -124,6 +124,9 @@ Exigences:
 - demander la permission de localisation;
 - afficher la position actuelle sur la carte;
 - mettre a jour la position quand l'utilisateur se deplace;
+- permettre de recentrer la carte sur la derniere position GPS connue;
+- permettre d'activer / desactiver le suivi continu de la position GPS;
+- desactiver le suivi continu si l'utilisateur deplace manuellement la carte;
 - afficher un message clair si la permission est refusee;
 - afficher un message clair si la position n'est pas disponible.
 
