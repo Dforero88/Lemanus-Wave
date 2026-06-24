@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "geo:300m": "node scripts/generate-300m-line.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "maplibre-gl": "^5.9.0"
   },
   "devDependencies": {
+    "@turf/turf": "^7.3.5",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
   }

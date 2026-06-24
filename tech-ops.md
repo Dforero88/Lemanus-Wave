@@ -128,6 +128,26 @@ Runtime API calls are allowed from the browser when needed, for example:
 - OpenFreeMap / map tile service;
 - Open-Meteo in MVP 2.
 
+## GeoJSON data generation
+
+The indicative 300 m line is generated from a manually prepared Lake Leman shoreline GeoJSON.
+
+Input:
+
+- `public/data/leman-shoreline.geojson`
+
+Output:
+
+- `public/data/leman-300m-indicative.geojson`
+
+Regenerate after updating the shoreline file:
+
+```sh
+npm run geo:300m
+```
+
+The generated line remains indicative only and must not be presented as a legal reference.
+
 ## When this decision changes
 
 The project should move toward `L3 + B3` only when product requirements actually include persistent product logic, for example:
