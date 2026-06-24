@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Limite indicative 300 m",
+        "disclaimer": "Ligne indicative non officielle. Ne constitue pas une reference legale."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [6.151, 46.211],
+          [6.188, 46.224],
+          [6.254, 46.260],
+          [6.326, 46.310],
+          [6.410, 46.363],
+          [6.505, 46.421],
+          [6.600, 46.480],
+          [6.700, 46.516],
+          [6.832, 46.465],
+          [6.958, 46.404],
+          [6.875, 46.389],
+          [6.758, 46.382],
+          [6.640, 46.390],
+          [6.520, 46.388],
+          [6.392, 46.354],
+          [6.286, 46.300],
+          [6.205, 46.246],
+          [6.151, 46.211]
+        ]
+      }
+    }
+  ]
+}
