@@ -62,21 +62,6 @@ Recommended mock behavior:
 - configurable simulated speed;
 - simple route across the lake for testing speed and map updates.
 
-## Local shoreline drawing
-
-The app may include a dev-only drawing tool in mock mode to create a custom Lake Leman shoreline polygon.
-
-Rules:
-
-- available only when `import.meta.env.DEV` is true;
-- available only in mock GPS mode;
-- never exposed in production builds;
-- used to draw a lake contour manually on the map;
-- export the result as a `GeoJSON` polygon;
-- use the exported polygon later as the source for generating a better indicative 300 m line.
-
-This tool is for internal data preparation, not for end users.
-
 ## Docker decision
 
 Docker is not required for the current MVP.
