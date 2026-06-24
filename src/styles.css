@@ -227,27 +227,36 @@ button {
   right: calc(16px + env(safe-area-inset-right));
   bottom: calc(178px + env(safe-area-inset-bottom));
   z-index: 10;
-  display: grid;
-  gap: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
 }
 
 .gps-map-button {
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(226, 232, 240, 0.22);
-  border-radius: 8px;
-  color: #f8fafc;
-  background: rgba(7, 19, 31, 0.84);
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.24);
-  backdrop-filter: blur(12px);
-  font-size: 1.22rem;
+  display: block;
+  width: 29px;
+  height: 29px;
+  border: 0;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0;
+  color: #333333;
+  background: #ffffff;
+  font-size: 1rem;
   line-height: 1;
 }
 
+.gps-map-button:last-child {
+  border-bottom: 0;
+}
+
+.gps-map-button:hover {
+  background: #f2f2f2;
+}
+
 .gps-map-button.is-active {
-  color: #07131f;
-  border-color: rgba(125, 211, 252, 0.9);
-  background: #7dd3fc;
+  color: #0369a1;
+  background: #e0f2fe;
 }
 
 .map-legend {
