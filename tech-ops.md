@@ -57,10 +57,10 @@ Rules:
 
 Recommended mock behavior:
 
-- fixed starting position on the Leman;
-- optional simulated movement;
-- configurable simulated speed;
-- simple route across the lake for testing speed and map updates.
+- fixed position on the Leman when `Activer GPS` is clicked;
+- no simulated movement;
+- no simulated speed;
+- speed may remain unavailable in mock mode.
 
 ## Docker decision
 
