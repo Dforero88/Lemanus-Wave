@@ -7,6 +7,7 @@ import { createGpsProvider, type GpsReading } from "./gps/provider";
 const LEMAN_CENTER: [number, number] = [6.55, 46.43];
 const INITIAL_ZOOM = 10.1;
 const SPEED_MIN_ACCURACY_METERS = 120;
+const isDevMockMode = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -87,6 +88,12 @@ map.on("load", () => {
       "line-dasharray": [2, 1.2]
     }
   });
+
+  if (isDevMockMode) {
+    void import("./dev/shorelineDraw").then(({ enableShorelineDraw }) => {
+      enableShorelineDraw(map);
+    });
+  }
 });
 
 locateEl.addEventListener("click", () => {

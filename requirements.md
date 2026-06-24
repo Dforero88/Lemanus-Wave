@@ -158,6 +158,19 @@ Texte de disclaimer recommande:
 
 > Ligne indicative non officielle. Ne constitue pas une reference legale.
 
+#### Outil de dessin local du contour du lac
+
+Pour ameliorer la ligne 300 m, un outil de dessin peut exister uniquement en local/dev.
+
+Exigences:
+
+- disponible uniquement en mode mock/dev;
+- permettre de dessiner un polygone du contour du lac a la souris;
+- permettre de reinitialiser le dessin;
+- permettre d'exporter le contour en `GeoJSON`;
+- ne pas exposer cet outil en production;
+- utiliser le contour exporte comme base pour generer plus tard une ligne indicative 300 m plus coherente.
+
 ### Hors scope MVP 1
 
 Ne pas inclure dans MVP 1:

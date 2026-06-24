@@ -138,6 +138,47 @@ button {
   box-shadow: 0 10px 28px rgba(2, 6, 23, 0.24);
 }
 
+.shoreline-draw {
+  position: fixed;
+  top: calc(118px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 10;
+  width: 172px;
+  padding: 10px;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  border-radius: 8px;
+  color: #f8fafc;
+  background: rgba(7, 19, 31, 0.86);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.shoreline-draw[data-active="true"] {
+  border-color: rgba(251, 191, 36, 0.8);
+}
+
+.shoreline-draw-title {
+  margin-bottom: 8px;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.shoreline-draw-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.shoreline-draw button {
+  min-height: 32px;
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  border-radius: 6px;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.92);
+  font-size: 0.75rem;
+}
+
 .maplibregl-ctrl-bottom-right {
   right: 8px;
   bottom: 8px;
