@@ -167,6 +167,7 @@ let stopGps: (() => void) | null = null;
 let weatherForecast: WeatherForecast | null = null;
 let selectedWeatherPeriod: WeatherPeriod = "now";
 let lastWeatherFetchKey: string | null = null;
+let isSpeedPanelOpen = true;
 
 const gpsProvider = createGpsProvider();
 
@@ -210,7 +211,14 @@ locateEl.addEventListener("click", () => {
 });
 
 speedToggleEl.addEventListener("click", () => {
-  togglePanel(speedCardEl, speedToggleEl, "vitesse");
+  isSpeedPanelOpen = togglePanel(speedCardEl, speedToggleEl, "vitesse");
+
+  if (!isSpeedPanelOpen) {
+    lastSmoothedSpeedKmh = null;
+    speedEl.textContent = "--";
+  } else if (lastReading) {
+    renderSpeed(lastReading);
+  }
 });
 
 weatherToggleEl.addEventListener("click", () => {
@@ -249,6 +257,12 @@ function renderReading(reading: GpsReading) {
     hasCenteredOnUser = true;
   }
 
+  if (isSpeedPanelOpen) {
+    renderSpeed(reading);
+  }
+}
+
+function renderSpeed(reading: GpsReading) {
   const speedKmh = getDisplaySpeedKmh(reading);
   speedEl.textContent = speedKmh === null ? "--" : Math.round(speedKmh).toString();
 }
@@ -389,10 +403,11 @@ function setStatus(message: string | null) {
   statusEl.textContent = message;
 }
 
-function togglePanel(card: HTMLElement, toggle: HTMLButtonElement, label: string) {
+function togglePanel(card: HTMLElement, toggle: HTMLButtonElement, label: string): boolean {
   const isCollapsed = card.classList.toggle("is-collapsed");
   toggle.textContent = isCollapsed ? "+" : "−";
   toggle.setAttribute("aria-label", isCollapsed ? `Afficher ${label}` : `Masquer ${label}`);
+  return !isCollapsed;
 }
 
 function formatDecimal(value: number): string {

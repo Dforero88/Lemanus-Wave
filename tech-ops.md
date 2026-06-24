@@ -62,6 +62,25 @@ Recommended mock behavior:
 - no simulated speed;
 - speed may remain unavailable in mock mode.
 
+## Speed calculation
+
+The app receives location updates through the browser Geolocation API after the user clicks `Activer GPS`.
+
+Speed behavior:
+
+- if the browser provides native GPS speed, display that value converted to `km/h`;
+- otherwise compute speed from the distance between the previous and current GPS readings divided by elapsed time;
+- smooth the displayed value to avoid abrupt jumps;
+- ignore computed speed when GPS accuracy is weaker than 120 m;
+- do not compute or update speed while the speed panel is collapsed;
+- reset the displayed speed to `--` when the speed panel is collapsed.
+
+Battery note:
+
+- the app still keeps GPS active while the speed panel is collapsed because the map position and weather features need the current location;
+- the browser is allowed to reuse recent positions for up to 5 seconds with `maximumAge: 5000`;
+- if battery use becomes a problem later, add a broader GPS mode control instead of only hiding the speed panel.
+
 ## Docker decision
 
 Docker is not required for the current MVP.

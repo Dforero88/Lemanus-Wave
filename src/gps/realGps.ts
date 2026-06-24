@@ -41,7 +41,7 @@ export function createRealGpsProvider(): GpsProvider {
         },
         {
           enableHighAccuracy: true,
-          maximumAge: 1000,
+          maximumAge: 5000,
           timeout: 12000
         }
       );
