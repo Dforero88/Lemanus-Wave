@@ -64,6 +64,11 @@ button {
   letter-spacing: 0;
 }
 
+.panel-actions {
+  display: flex;
+  gap: 5px;
+}
+
 .panel-toggle {
   width: 26px;
   height: 26px;
@@ -72,6 +77,10 @@ button {
   color: rgba(248, 250, 252, 0.92);
   background: rgba(15, 23, 42, 0.74);
   line-height: 1;
+}
+
+.panel-toggle:disabled {
+  opacity: 0.48;
 }
 
 .weather-body {

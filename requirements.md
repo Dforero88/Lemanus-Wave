@@ -204,6 +204,9 @@ Exigences:
 - afficher vent, direction du vent et rafales dans le meme bloc;
 - grouper les metriques dans un rendu compact et premium;
 - permettre de masquer / afficher le bloc meteo;
+- charger la meteo une seule fois quand la premiere position GPS est disponible;
+- permettre une actualisation manuelle via un bouton refresh;
+- ne pas rafraichir automatiquement la meteo a chaque mouvement GPS;
 - preparer la structure pour une prevision `+1h`;
 - gerer l'indisponibilite de l'API proprement.
 

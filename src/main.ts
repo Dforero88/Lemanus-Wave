@@ -28,7 +28,10 @@ app.innerHTML = `
     <section id="weatherCard" class="weather-card" aria-live="polite">
       <header class="panel-header">
         <span class="panel-title">Meteo</span>
-        <button id="weatherToggle" class="panel-toggle" type="button" aria-label="Masquer la meteo">−</button>
+        <div class="panel-actions">
+          <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la meteo" disabled>↻</button>
+          <button id="weatherToggle" class="panel-toggle" type="button" aria-label="Masquer la meteo">−</button>
+        </div>
       </header>
       <div class="weather-body">
         <div class="weather-tabs" role="group" aria-label="Periode meteo">
@@ -82,6 +85,7 @@ const speedValue = document.querySelector<HTMLElement>("#speedValue");
 const speedCard = document.querySelector<HTMLElement>("#speedCard");
 const speedToggle = document.querySelector<HTMLButtonElement>("#speedToggle");
 const weatherCard = document.querySelector<HTMLElement>("#weatherCard");
+const weatherRefresh = document.querySelector<HTMLButtonElement>("#weatherRefresh");
 const weatherToggle = document.querySelector<HTMLButtonElement>("#weatherToggle");
 const weatherNowTab = document.querySelector<HTMLButtonElement>("#weatherNowTab");
 const weatherPlus1hTab = document.querySelector<HTMLButtonElement>("#weatherPlus1hTab");
@@ -104,6 +108,7 @@ if (
   !speedCard ||
   !speedToggle ||
   !weatherCard ||
+  !weatherRefresh ||
   !weatherToggle ||
   !weatherNowTab ||
   !weatherPlus1hTab ||
@@ -128,6 +133,7 @@ const speedEl = speedValue;
 const speedCardEl = speedCard;
 const speedToggleEl = speedToggle;
 const weatherCardEl = weatherCard;
+const weatherRefreshEl = weatherRefresh;
 const weatherToggleEl = weatherToggle;
 const weatherNowTabEl = weatherNowTab;
 const weatherPlus1hTabEl = weatherPlus1hTab;
@@ -176,7 +182,8 @@ let lastSmoothedSpeedKmh: number | null = null;
 let stopGps: (() => void) | null = null;
 let weatherForecast: WeatherForecast | null = null;
 let selectedWeatherPeriod: WeatherPeriod = "now";
-let lastWeatherFetchKey: string | null = null;
+let hasLoadedInitialWeather = false;
+let isWeatherLoading = false;
 let isSpeedPanelOpen = true;
 let isGpsActive = false;
 let isFollowGpsEnabled = false;
@@ -252,13 +259,17 @@ function startGps() {
     (reading) => {
       renderReading(reading);
       lastReading = reading;
-      void updateWeather(reading);
+      weatherRefreshEl.disabled = false;
+      if (!hasLoadedInitialWeather) {
+        void updateWeather(reading);
+      }
       setStatus(null);
     },
     (message) => {
       locateEl.disabled = false;
       locateEl.textContent = "Activer GPS";
       isGpsActive = false;
+      weatherRefreshEl.disabled = true;
       setFollowGps(false);
       setStatus(message);
     }
@@ -278,6 +289,15 @@ speedToggleEl.addEventListener("click", () => {
 
 weatherToggleEl.addEventListener("click", () => {
   togglePanel(weatherCardEl, weatherToggleEl, "meteo");
+});
+
+weatherRefreshEl.addEventListener("click", () => {
+  if (!lastReading) {
+    setWeatherStatus("GPS requis");
+    return;
+  }
+
+  void updateWeather(lastReading);
 });
 
 weatherNowTabEl.addEventListener("click", () => {
@@ -357,21 +377,24 @@ function renderSpeed(reading: GpsReading) {
 }
 
 async function updateWeather(reading: GpsReading) {
-  const fetchKey = `${reading.latitude.toFixed(3)},${reading.longitude.toFixed(3)}`;
-
-  if (lastWeatherFetchKey === fetchKey && weatherForecast) {
+  if (isWeatherLoading) {
     return;
   }
 
-  lastWeatherFetchKey = fetchKey;
+  isWeatherLoading = true;
+  weatherRefreshEl.disabled = true;
   setWeatherStatus("Meteo en cours...");
 
   try {
     weatherForecast = await fetchWeatherForPosition(reading);
+    hasLoadedInitialWeather = true;
     renderWeather();
   } catch {
     weatherForecast = null;
     setWeatherStatus("Meteo indisponible");
+  } finally {
+    isWeatherLoading = false;
+    weatherRefreshEl.disabled = false;
   }
 }
 

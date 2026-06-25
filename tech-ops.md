@@ -81,6 +81,19 @@ Battery note:
 - the browser is allowed to reuse recent positions for up to 5 seconds with `maximumAge: 5000`;
 - if battery use becomes a problem later, add a broader GPS mode control instead of only hiding the speed panel.
 
+## Battery-conscious update rules
+
+The app should avoid unnecessary sensor, CPU, and network work.
+
+Rules:
+
+- GPS is the only frequently updated live signal after the user activates it.
+- Speed is derived from GPS and is calculated only while the speed panel is open.
+- Weather is fetched once when the first GPS position is available.
+- Weather is fetched again only when the user taps the weather refresh button.
+- Weather must not auto-refresh on every GPS movement.
+- Weather must not auto-refresh just because the weather panel is opened or closed.
+
 ## Docker decision
 
 Docker is not required for the current MVP.
