@@ -27,6 +27,8 @@ const SPEED_START_CONFIRM_TOLERANCE_KMH = 10;
 const SPEED_MAX_PLAUSIBLE_KMH = 120;
 const SPEED_JUMP_MARGIN_KMH = 35;
 const SPEED_JUMP_FACTOR = 1.8;
+const HEADING_MAP_MIN_ROTATION_DELTA_DEGREES = 2;
+const HEADING_MAP_MIN_ROTATION_INTERVAL_MS = 250;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -216,6 +218,8 @@ let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
 let isProgrammaticMapMove = false;
+let lastAppliedMapHeadingDegrees: number | null = null;
+let lastHeadingMapRotationAt = 0;
 
 const gpsProvider = createGpsProvider();
 const orientationProvider = createOrientationProvider();
@@ -279,9 +283,8 @@ headingEl.addEventListener("click", () => {
   setHeadingMapEnabled(!isHeadingMapEnabled);
 });
 
-map.on("dragstart", disableFollowOnUserMove);
-map.on("zoomstart", disableFollowOnUserMove);
-map.on("rotatestart", disableFollowOnUserMove);
+map.on("dragstart", disableAutoMapModesOnUserMove);
+map.on("rotatestart", disableAutoMapModesOnUserMove);
 map.on("rotate", () => {
   if (lastOrientation) {
     renderOrientation(lastOrientation);
@@ -439,15 +442,29 @@ function setHeadingMapEnabled(enabled: boolean) {
 
   if (enabled && lastOrientation) {
     rotateMapToHeading(lastOrientation.headingDegrees, 350);
+  } else if (!enabled) {
+    lastAppliedMapHeadingDegrees = null;
+    lastHeadingMapRotationAt = 0;
   }
 }
 
-function disableFollowOnUserMove() {
-  if (!isProgrammaticMapMove && isFollowGpsEnabled) {
+function disableAutoMapModesOnUserMove(event?: { originalEvent?: unknown }) {
+  const isUserMove = Boolean(event?.originalEvent);
+
+  if (!isUserMove && isProgrammaticMapMove) {
+    return;
+  }
+
+  if (isUserMove) {
+    map.stop();
+    isProgrammaticMapMove = false;
+  }
+
+  if (isFollowGpsEnabled) {
     setFollowGps(false);
   }
 
-  if (!isProgrammaticMapMove && isHeadingMapEnabled) {
+  if (isHeadingMapEnabled) {
     setHeadingMapEnabled(false);
   }
 }
@@ -498,6 +515,19 @@ function renderOrientation(reading: OrientationReading) {
 }
 
 function rotateMapToHeading(headingDegrees: number, duration: number) {
+  const now = Date.now();
+  const previousHeadingDegrees = lastAppliedMapHeadingDegrees ?? map.getBearing();
+  const deltaDegrees = Math.abs(getShortestAngleDelta(previousHeadingDegrees, headingDegrees));
+
+  if (
+    deltaDegrees < HEADING_MAP_MIN_ROTATION_DELTA_DEGREES &&
+    now - lastHeadingMapRotationAt < HEADING_MAP_MIN_ROTATION_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  lastAppliedMapHeadingDegrees = headingDegrees;
+  lastHeadingMapRotationAt = now;
   isProgrammaticMapMove = true;
   map.easeTo({
     bearing: headingDegrees,
@@ -506,6 +536,10 @@ function rotateMapToHeading(headingDegrees: number, duration: number) {
   window.setTimeout(() => {
     isProgrammaticMapMove = false;
   }, duration + 80);
+}
+
+function getShortestAngleDelta(fromDegrees: number, toDegrees: number): number {
+  return ((((toDegrees - fromDegrees) % 360) + 540) % 360) - 180;
 }
 
 function renderSpeed(reading: GpsReading) {

@@ -79,7 +79,10 @@ Rules:
 - keep the GPS marker as a simple dot when orientation is unavailable or refused;
 - ask for device orientation permission only from a user action when the browser requires it;
 - allow the user to rotate the map according to phone orientation via a dedicated map control;
-- disable map-orientation mode when the user manipulates the map manually;
+- disable map-orientation mode when the user drags or rotates the map manually;
+- allow manual zoom without disabling follow-position or map-orientation modes;
+- stop any active automatic map animation when the user starts dragging or rotating the map;
+- throttle automatic map bearing updates to avoid fighting user gestures and stacking map animations;
 - in local mock GPS mode, use a fixed south-facing orientation.
 
 ## Speed calculation
