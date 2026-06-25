@@ -11,7 +11,6 @@ export type WeatherSnapshot = {
   precipitationMm: number | null;
   windSpeedKmh: number | null;
   windDirectionDeg: number | null;
-  windGustKmh: number | null;
 };
 
 export type WeatherForecast = {
@@ -28,7 +27,6 @@ type OpenMeteoResponse = {
     precipitation?: number;
     wind_speed_10m?: number;
     wind_direction_10m?: number;
-    wind_gusts_10m?: number;
   };
   hourly?: {
     time?: string[];
@@ -37,7 +35,6 @@ type OpenMeteoResponse = {
     precipitation?: number[];
     wind_speed_10m?: number[];
     wind_direction_10m?: number[];
-    wind_gusts_10m?: number[];
   };
 };
 
@@ -46,8 +43,7 @@ const CURRENT_FIELDS = [
   "weather_code",
   "precipitation",
   "wind_speed_10m",
-  "wind_direction_10m",
-  "wind_gusts_10m"
+  "wind_direction_10m"
 ].join(",");
 
 export async function fetchWeatherForPosition(reading: GpsReading): Promise<WeatherForecast> {
@@ -89,8 +85,7 @@ function createCurrentSnapshot(data: OpenMeteoResponse): WeatherSnapshot {
     weatherCode: numberOrNull(current.weather_code),
     precipitationMm: numberOrNull(current.precipitation),
     windSpeedKmh: numberOrNull(current.wind_speed_10m),
-    windDirectionDeg: numberOrNull(current.wind_direction_10m),
-    windGustKmh: numberOrNull(current.wind_gusts_10m)
+    windDirectionDeg: numberOrNull(current.wind_direction_10m)
   };
 }
 
@@ -117,8 +112,7 @@ function createPlus1hSnapshot(data: OpenMeteoResponse, currentTime: string): Wea
     weatherCode: numberOrNull(hourly.weather_code?.[index]),
     precipitationMm: numberOrNull(hourly.precipitation?.[index]),
     windSpeedKmh: numberOrNull(hourly.wind_speed_10m?.[index]),
-    windDirectionDeg: numberOrNull(hourly.wind_direction_10m?.[index]),
-    windGustKmh: numberOrNull(hourly.wind_gusts_10m?.[index])
+    windDirectionDeg: numberOrNull(hourly.wind_direction_10m?.[index])
   };
 }
 
@@ -141,6 +135,25 @@ export function describeWeatherCode(code: number | null): string {
   if ([95, 96, 99].includes(code)) return "Orage";
 
   return "Meteo";
+}
+
+export function getWeatherIconPath(code: number | null): string {
+  const basePath = "/weather-icons";
+
+  if (code === null) {
+    return `${basePath}/not-available.svg`;
+  }
+
+  if (code === 0) return `${basePath}/clear-day.svg`;
+  if ([1, 2].includes(code)) return `${basePath}/partly-cloudy-day.svg`;
+  if (code === 3) return `${basePath}/overcast.svg`;
+  if ([45, 48].includes(code)) return `${basePath}/fog.svg`;
+  if ([51, 53, 55, 56, 57].includes(code)) return `${basePath}/drizzle.svg`;
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return `${basePath}/rain.svg`;
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return `${basePath}/snow.svg`;
+  if ([95, 96, 99].includes(code)) return `${basePath}/thunderstorms.svg`;
+
+  return `${basePath}/cloudy.svg`;
 }
 
 export function formatWindDirection(degrees: number | null): string {

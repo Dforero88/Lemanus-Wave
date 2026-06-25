@@ -7,6 +7,7 @@ import {
   describeWeatherCode,
   fetchWeatherForPosition,
   formatWindDirection,
+  getWeatherIconPath,
   type WeatherForecast,
   type WeatherPeriod,
   type WeatherSnapshot
@@ -41,17 +42,21 @@ app.innerHTML = `
         <div id="weatherStatus" class="weather-status">GPS requis</div>
         <div id="weatherMetrics" class="weather-metrics" hidden>
           <div class="weather-primary">
-            <strong id="weatherTemp">--</strong>
-            <span id="weatherCondition">--</span>
+            <span class="weather-icon-frame" aria-hidden="true">
+              <img id="weatherIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
+            </span>
+            <div class="weather-main">
+              <strong id="weatherTemp">--</strong>
+              <span id="weatherCondition">--</span>
+            </div>
           </div>
           <div class="metric-group">
             <span class="metric-label">Vent</span>
-            <strong id="weatherWind">--</strong>
+            <div class="wind-row">
+              <strong id="weatherWind">--</strong>
+              <span id="weatherWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
+            </div>
             <span id="weatherWindDirection">--</span>
-          </div>
-          <div class="metric-group">
-            <span class="metric-label">Rafales</span>
-            <strong id="weatherGusts">--</strong>
           </div>
           <div class="metric-group">
             <span class="metric-label">Pluie</span>
@@ -91,11 +96,12 @@ const weatherNowTab = document.querySelector<HTMLButtonElement>("#weatherNowTab"
 const weatherPlus1hTab = document.querySelector<HTMLButtonElement>("#weatherPlus1hTab");
 const weatherStatus = document.querySelector<HTMLElement>("#weatherStatus");
 const weatherMetrics = document.querySelector<HTMLElement>("#weatherMetrics");
+const weatherIcon = document.querySelector<HTMLImageElement>("#weatherIcon");
 const weatherTemp = document.querySelector<HTMLElement>("#weatherTemp");
 const weatherCondition = document.querySelector<HTMLElement>("#weatherCondition");
 const weatherWind = document.querySelector<HTMLElement>("#weatherWind");
+const weatherWindArrow = document.querySelector<HTMLElement>("#weatherWindArrow");
 const weatherWindDirection = document.querySelector<HTMLElement>("#weatherWindDirection");
-const weatherGusts = document.querySelector<HTMLElement>("#weatherGusts");
 const weatherRain = document.querySelector<HTMLElement>("#weatherRain");
 const weatherUpdatedAt = document.querySelector<HTMLElement>("#weatherUpdatedAt");
 const locateButton = document.querySelector<HTMLButtonElement>("#locateButton");
@@ -114,11 +120,12 @@ if (
   !weatherPlus1hTab ||
   !weatherStatus ||
   !weatherMetrics ||
+  !weatherIcon ||
   !weatherTemp ||
   !weatherCondition ||
   !weatherWind ||
+  !weatherWindArrow ||
   !weatherWindDirection ||
-  !weatherGusts ||
   !weatherRain ||
   !weatherUpdatedAt ||
   !locateButton ||
@@ -139,11 +146,12 @@ const weatherNowTabEl = weatherNowTab;
 const weatherPlus1hTabEl = weatherPlus1hTab;
 const weatherStatusEl = weatherStatus;
 const weatherMetricsEl = weatherMetrics;
+const weatherIconEl = weatherIcon;
 const weatherTempEl = weatherTemp;
 const weatherConditionEl = weatherCondition;
 const weatherWindEl = weatherWind;
+const weatherWindArrowEl = weatherWindArrow;
 const weatherWindDirectionEl = weatherWindDirection;
-const weatherGustsEl = weatherGusts;
 const weatherRainEl = weatherRain;
 const weatherUpdatedAtEl = weatherUpdatedAt;
 const locateEl = locateButton;
@@ -418,12 +426,13 @@ function renderWeather() {
 
   weatherTempEl.textContent =
     snapshot.temperatureC === null ? "--" : `${Math.round(snapshot.temperatureC)}°`;
+  weatherIconEl.src = getWeatherIconPath(snapshot.weatherCode);
   weatherConditionEl.textContent = describeWeatherCode(snapshot.weatherCode);
   weatherWindEl.textContent =
     snapshot.windSpeedKmh === null ? "--" : `${Math.round(snapshot.windSpeedKmh)} km/h`;
   weatherWindDirectionEl.textContent = formatWindDirection(snapshot.windDirectionDeg);
-  weatherGustsEl.textContent =
-    snapshot.windGustKmh === null ? "--" : `${Math.round(snapshot.windGustKmh)} km/h`;
+  weatherWindArrowEl.style.transform =
+    snapshot.windDirectionDeg === null ? "rotate(0deg)" : `rotate(${snapshot.windDirectionDeg}deg)`;
   weatherRainEl.textContent =
     snapshot.precipitationMm === null ? "--" : `${formatDecimal(snapshot.precipitationMm)} mm`;
   weatherUpdatedAtEl.textContent = `Maj ${formatTime(weatherForecast.updatedAt)} · ${snapshot.label}`;

@@ -93,6 +93,8 @@ Rules:
 - Weather is fetched again only when the user taps the weather refresh button.
 - Weather must not auto-refresh on every GPS movement.
 - Weather must not auto-refresh just because the weather panel is opened or closed.
+- Weather condition visuals use local Meteocons SVG assets from `public/weather-icons`.
+- Use the animated `fill` variant only, and copy only the icons needed by the app.
 
 ## Docker decision
 

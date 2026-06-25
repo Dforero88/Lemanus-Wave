@@ -167,7 +167,6 @@ Ne pas inclure dans MVP 1:
 
 - meteo;
 - vent;
-- rafales;
 - ports;
 - cap;
 - ETA;
@@ -199,9 +198,11 @@ Exigences:
 
 - afficher temperature;
 - afficher conditions principales;
+- afficher une icone meteo animee;
 - afficher precipitation si disponible;
 - afficher heure de derniere mise a jour;
-- afficher vent, direction du vent et rafales dans le meme bloc;
+- afficher vent et direction du vent dans le meme bloc;
+- afficher une indication visuelle de l'orientation du vent;
 - grouper les metriques dans un rendu compact et premium;
 - permettre de masquer / afficher le bloc meteo;
 - charger la meteo une seule fois quand la premiere position GPS est disponible;
@@ -210,21 +211,17 @@ Exigences:
 - preparer la structure pour une prevision `+1h`;
 - gerer l'indisponibilite de l'API proprement.
 
-#### Vent et rafales
+#### Vent
 
-L'utilisateur doit voir le vent et les rafales dans le bloc meteo.
+L'utilisateur doit voir le vent dans le bloc meteo.
 
 Exigences:
 
 - afficher vitesse du vent;
 - afficher direction du vent;
-- afficher rafales;
+- afficher une fleche d'orientation du vent;
 - afficher unite claire;
 - privilegier une presentation simple et lisible.
-
-Option:
-
-- ajouter un indicateur de niveau de prudence base sur les rafales, clairement marque comme indicatif.
 
 #### Ports principaux
 
@@ -361,7 +358,7 @@ MVP 1 est acceptable si:
 MVP 2 est acceptable si:
 
 - la meteo actuelle s'affiche;
-- le vent et les rafales s'affichent;
+- le vent et sa direction s'affichent;
 - les ports principaux s'affichent sur la carte;
 - l'utilisateur peut choisir un port comme destination;
 - la distance vers la destination s'affiche;
