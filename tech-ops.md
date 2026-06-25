@@ -82,7 +82,10 @@ Rules:
 - disable map-orientation mode when the user drags or rotates the map manually;
 - allow manual zoom without disabling follow-position or map-orientation modes;
 - stop any active automatic map animation when the user starts dragging or rotating the map;
+- combine follow-position and map-orientation updates through one camera sync path;
+- use the latest usable GPS reading for marker and camera updates, not necessarily the latest raw GPS reading;
 - throttle automatic map bearing updates to avoid fighting user gestures and stacking map animations;
+- throttle marker heading rendering separately from map rotation;
 - in local mock GPS mode, use a fixed south-facing orientation.
 
 ## Speed calculation
@@ -93,6 +96,7 @@ Speed behavior:
 
 - if the browser provides native GPS speed, display that value converted to `km/h`;
 - otherwise compute speed from the distance between the previous and current GPS readings divided by elapsed time;
+- keep a dedicated `lastSpeedReading` so ignored short-interval GPS samples do not freeze or corrupt speed calculation;
 - smooth the displayed value to avoid abrupt jumps;
 - ignore computed speed when GPS accuracy is weaker than 120 m;
 - ignore samples closer than 1.5 seconds apart for computed speed;

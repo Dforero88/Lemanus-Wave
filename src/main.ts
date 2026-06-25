@@ -16,6 +16,7 @@ import {
 
 const LEMAN_CENTER: [number, number] = [6.55, 46.43];
 const INITIAL_ZOOM = 10.1;
+const POSITION_MAX_ACCURACY_METERS = 200;
 const SPEED_MIN_ACCURACY_METERS = 120;
 const SPEED_MIN_ELAPSED_SECONDS = 1.5;
 const SPEED_MIN_DISTANCE_METERS = 1.5;
@@ -29,6 +30,8 @@ const SPEED_JUMP_MARGIN_KMH = 35;
 const SPEED_JUMP_FACTOR = 1.8;
 const HEADING_MAP_MIN_ROTATION_DELTA_DEGREES = 2;
 const HEADING_MAP_MIN_ROTATION_INTERVAL_MS = 250;
+const HEADING_MARKER_MIN_RENDER_DELTA_DEGREES = 1;
+const HEADING_MARKER_MIN_RENDER_INTERVAL_MS = 120;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -204,6 +207,8 @@ let currentMarker: maplibregl.Marker | null = null;
 let currentMarkerElement: HTMLElement | null = null;
 let hasCenteredOnUser = false;
 let lastReading: GpsReading | null = null;
+let lastUsableReading: GpsReading | null = null;
+let lastSpeedReading: GpsReading | null = null;
 let lastOrientation: OrientationReading | null = null;
 let lastSmoothedSpeedKmh: number | null = null;
 let pendingStartSpeedKmh: number | null = null;
@@ -218,8 +223,13 @@ let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
 let isProgrammaticMapMove = false;
+let cameraMoveToken = 0;
+let pendingCameraSync = false;
+let pendingCameraDuration = 180;
 let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
+let lastRenderedHeadingDegrees: number | null = null;
+let lastHeadingMarkerRenderAt = 0;
 
 const gpsProvider = createGpsProvider();
 const orientationProvider = createOrientationProvider();
@@ -253,8 +263,8 @@ centerGpsEl.addEventListener("click", () => {
     return;
   }
 
-  if (lastReading) {
-    centerOnGps(lastReading);
+  if (lastUsableReading) {
+    centerOnGps(lastUsableReading);
   } else {
     setStatus("Position GPS en attente...");
   }
@@ -269,8 +279,8 @@ followGpsEl.addEventListener("click", () => {
 
   setFollowGps(!isFollowGpsEnabled);
 
-  if (isFollowGpsEnabled && lastReading) {
-    centerOnGps(lastReading);
+  if (isFollowGpsEnabled && lastUsableReading) {
+    centerOnGps(lastUsableReading);
   }
 });
 
@@ -307,8 +317,8 @@ function startGps() {
 
   stopGps = gpsProvider.watch(
     (reading) => {
-      renderReading(reading);
       lastReading = reading;
+      renderReading(reading);
       weatherRefreshEl.disabled = false;
       if (!hasLoadedInitialWeather) {
         void updateWeather(reading);
@@ -331,6 +341,7 @@ speedToggleEl.addEventListener("click", () => {
   if (!isSpeedPanelOpen) {
     lastSmoothedSpeedKmh = null;
     pendingStartSpeedKmh = null;
+    lastSpeedReading = null;
     speedEl.textContent = "--";
   } else if (lastReading) {
     renderSpeed(lastReading);
@@ -367,8 +378,18 @@ window.addEventListener("beforeunload", () => {
 
 function renderReading(reading: GpsReading) {
   const lngLat: [number, number] = [reading.longitude, reading.latitude];
+  const isPositionUsable = isUsablePositionReading(reading);
 
-  if (!currentMarker) {
+  if (!isPositionUsable) {
+    if (isSpeedPanelOpen) {
+      renderSpeed(reading);
+    }
+    return;
+  }
+
+  lastUsableReading = reading;
+
+  if (!currentMarker && isPositionUsable) {
     const markerElement = document.createElement("div");
     markerElement.className = "position-marker";
     markerElement.innerHTML = '<span class="position-marker-heading"></span><span class="position-marker-dot"></span>';
@@ -376,7 +397,7 @@ function renderReading(reading: GpsReading) {
     currentMarker = new maplibregl.Marker({ element: markerElement, anchor: "center" })
       .setLngLat(lngLat)
       .addTo(map);
-  } else {
+  } else if (currentMarker && isPositionUsable) {
     currentMarker.setLngLat(lngLat);
   }
 
@@ -388,7 +409,7 @@ function renderReading(reading: GpsReading) {
     moveMapToGps(reading, { zoom: Math.max(map.getZoom(), 12), duration: 800 });
     hasCenteredOnUser = true;
   } else if (isFollowGpsEnabled) {
-    moveMapToGps(reading, { duration: 500 });
+    requestCameraSync(300);
   }
 
   if (isSpeedPanelOpen) {
@@ -404,7 +425,6 @@ function centerOnGps(reading: GpsReading) {
 }
 
 function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: number }) {
-  isProgrammaticMapMove = true;
   const cameraOptions: maplibregl.EaseToOptions = {
     center: [reading.longitude, reading.latitude],
     duration: options.duration
@@ -418,10 +438,7 @@ function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: n
     cameraOptions.bearing = lastOrientation.headingDegrees;
   }
 
-  map.easeTo(cameraOptions);
-  window.setTimeout(() => {
-    isProgrammaticMapMove = false;
-  }, options.duration + 80);
+  runCameraEase(cameraOptions, options.duration);
 }
 
 function setFollowGps(enabled: boolean) {
@@ -441,7 +458,7 @@ function setHeadingMapEnabled(enabled: boolean) {
   );
 
   if (enabled && lastOrientation) {
-    rotateMapToHeading(lastOrientation.headingDegrees, 350);
+    requestCameraSync(350);
   } else if (!enabled) {
     lastAppliedMapHeadingDegrees = null;
     lastHeadingMapRotationAt = 0;
@@ -457,6 +474,7 @@ function disableAutoMapModesOnUserMove(event?: { originalEvent?: unknown }) {
 
   if (isUserMove) {
     map.stop();
+    cameraMoveToken += 1;
     isProgrammaticMapMove = false;
   }
 
@@ -479,7 +497,7 @@ async function startOrientation(options: { rotateMap: boolean }) {
         renderOrientation(reading);
 
         if (isHeadingMapEnabled) {
-          rotateMapToHeading(reading.headingDegrees, 180);
+          requestCameraSync(180);
         }
       },
       (message) => {
@@ -510,11 +528,61 @@ function renderOrientation(reading: OrientationReading) {
     return;
   }
 
+  const now = Date.now();
+  const previousHeadingDegrees = lastRenderedHeadingDegrees ?? reading.headingDegrees;
+  const deltaDegrees = Math.abs(getShortestAngleDelta(previousHeadingDegrees, reading.headingDegrees));
+
+  if (
+    lastRenderedHeadingDegrees !== null &&
+    deltaDegrees < HEADING_MARKER_MIN_RENDER_DELTA_DEGREES &&
+    now - lastHeadingMarkerRenderAt < HEADING_MARKER_MIN_RENDER_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  lastRenderedHeadingDegrees = reading.headingDegrees;
+  lastHeadingMarkerRenderAt = now;
   currentMarkerElement.classList.add("has-heading");
   currentMarkerElement.style.setProperty("--heading", `${reading.headingDegrees - map.getBearing()}deg`);
 }
 
-function rotateMapToHeading(headingDegrees: number, duration: number) {
+function requestCameraSync(duration: number) {
+  pendingCameraDuration = Math.max(pendingCameraDuration, duration);
+
+  if (pendingCameraSync) {
+    return;
+  }
+
+  pendingCameraSync = true;
+  window.requestAnimationFrame(() => {
+    const syncDuration = pendingCameraDuration;
+    pendingCameraSync = false;
+    pendingCameraDuration = 180;
+    syncCamera(syncDuration);
+  });
+}
+
+function syncCamera(duration: number) {
+  const cameraOptions: maplibregl.EaseToOptions = {
+    duration
+  };
+
+  if (isFollowGpsEnabled && lastUsableReading) {
+    cameraOptions.center = [lastUsableReading.longitude, lastUsableReading.latitude];
+  }
+
+  if (isHeadingMapEnabled && lastOrientation && shouldApplyMapHeading(lastOrientation.headingDegrees)) {
+    cameraOptions.bearing = lastOrientation.headingDegrees;
+  }
+
+  if (!("center" in cameraOptions) && !("bearing" in cameraOptions)) {
+    return;
+  }
+
+  runCameraEase(cameraOptions, duration);
+}
+
+function shouldApplyMapHeading(headingDegrees: number): boolean {
   const now = Date.now();
   const previousHeadingDegrees = lastAppliedMapHeadingDegrees ?? map.getBearing();
   const deltaDegrees = Math.abs(getShortestAngleDelta(previousHeadingDegrees, headingDegrees));
@@ -523,19 +591,28 @@ function rotateMapToHeading(headingDegrees: number, duration: number) {
     deltaDegrees < HEADING_MAP_MIN_ROTATION_DELTA_DEGREES &&
     now - lastHeadingMapRotationAt < HEADING_MAP_MIN_ROTATION_INTERVAL_MS
   ) {
-    return;
+    return false;
   }
 
   lastAppliedMapHeadingDegrees = headingDegrees;
   lastHeadingMapRotationAt = now;
+  return true;
+}
+
+function runCameraEase(cameraOptions: maplibregl.EaseToOptions, duration: number) {
+  const token = cameraMoveToken + 1;
+  cameraMoveToken = token;
   isProgrammaticMapMove = true;
-  map.easeTo({
-    bearing: headingDegrees,
-    duration
-  });
+  map.easeTo(cameraOptions);
   window.setTimeout(() => {
-    isProgrammaticMapMove = false;
+    if (cameraMoveToken === token) {
+      isProgrammaticMapMove = false;
+    }
   }, duration + 80);
+}
+
+function isUsablePositionReading(reading: GpsReading): boolean {
+  return reading.accuracy <= POSITION_MAX_ACCURACY_METERS;
 }
 
 function getShortestAngleDelta(fromDegrees: number, toDegrees: number): number {
@@ -616,15 +693,21 @@ function setWeatherStatus(message: string) {
 }
 
 function getDisplaySpeedKmh(reading: GpsReading): number | null {
-  const previous = lastReading;
+  const previous = lastSpeedReading;
   const nativeSpeedKmh = getNativeSpeedKmh(reading);
 
   if (!previous || previous.timestamp === reading.timestamp) {
+    lastSpeedReading = reading;
     return applySpeedGuards(nativeSpeedKmh);
   }
 
   if (reading.accuracy > SPEED_MIN_ACCURACY_METERS || previous.accuracy > SPEED_MIN_ACCURACY_METERS) {
-    return nativeSpeedKmh === null ? lastSmoothedSpeedKmh : applySpeedGuards(nativeSpeedKmh);
+    if (nativeSpeedKmh === null) {
+      return lastSmoothedSpeedKmh;
+    }
+
+    lastSpeedReading = reading;
+    return applySpeedGuards(nativeSpeedKmh);
   }
 
   const elapsedSeconds = (reading.timestamp - previous.timestamp) / 1000;
@@ -640,6 +723,7 @@ function getDisplaySpeedKmh(reading: GpsReading): number | null {
   );
 
   if (distanceMeters <= stationaryDistanceMeters) {
+    lastSpeedReading = reading;
     return nativeSpeedKmh === null ? smoothSpeed(0) : applySpeedGuards(nativeSpeedKmh);
   }
 
@@ -650,9 +734,11 @@ function getDisplaySpeedKmh(reading: GpsReading): number | null {
   }
 
   if (nativeSpeedKmh !== null && computedKmh <= SPEED_MAX_PLAUSIBLE_KMH) {
+    lastSpeedReading = reading;
     return applySpeedGuards(nativeSpeedKmh);
   }
 
+  lastSpeedReading = reading;
   return applySpeedGuards(computedKmh);
 }
 
