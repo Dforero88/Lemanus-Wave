@@ -1,0 +1,43 @@
+name: Build and Deploy (Infomaniak)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    env:
+      INFOMANIAK_TARGET_DIR: /home/clients/e4b8ac78e56323a53a9250cf9405a172/sites/nav.dramnotes.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static app
+        run: npm run build
+
+      - name: Install rsync + sshpass
+        run: sudo apt-get update && sudo apt-get install -y rsync sshpass
+
+      - name: Upload dist to Infomaniak
+        run: |
+          sshpass -p "${{ secrets.INFOMANIAK_PASSWORD }}" rsync -az --delete --partial \
+            --exclude='.htaccess' \
+            --exclude='.htaccess.*.bak' \
+            --exclude='.htdigest' \
+            --exclude='.htdigest.*.bak' \
+            --exclude='.user.ini' \
+            -e "ssh -p ${{ secrets.INFOMANIAK_PORT }} -o StrictHostKeyChecking=no" \
+            dist/ ${{ secrets.INFOMANIAK_USER }}@${{ secrets.INFOMANIAK_HOST }}:${INFOMANIAK_TARGET_DIR}/
