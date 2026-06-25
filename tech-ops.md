@@ -72,6 +72,12 @@ Speed behavior:
 - otherwise compute speed from the distance between the previous and current GPS readings divided by elapsed time;
 - smooth the displayed value to avoid abrupt jumps;
 - ignore computed speed when GPS accuracy is weaker than 120 m;
+- ignore samples closer than 1.5 seconds apart for computed speed;
+- treat only very small GPS movements as stationary to avoid speed caused by GPS jitter while preserving low-speed navigation;
+- prefer the browser native speed when available, including at low speed;
+- require one confirming sample before accepting a sudden start above 8 km/h from a near-stationary state;
+- reject impossible speed spikes above 120 km/h;
+- reject sudden jumps from an already established speed unless they stay within a plausible acceleration envelope;
 - do not compute or update speed while the speed panel is collapsed;
 - reset the displayed speed to `--` when the speed panel is collapsed.
 

@@ -16,6 +16,16 @@ import {
 const LEMAN_CENTER: [number, number] = [6.55, 46.43];
 const INITIAL_ZOOM = 10.1;
 const SPEED_MIN_ACCURACY_METERS = 120;
+const SPEED_MIN_ELAPSED_SECONDS = 1.5;
+const SPEED_MIN_DISTANCE_METERS = 1.5;
+const SPEED_STATIONARY_ACCURACY_RATIO = 0.2;
+const SPEED_ZERO_THRESHOLD_KMH = 0.8;
+const SPEED_NEAR_ZERO_KMH = 2;
+const SPEED_START_CONFIRM_KMH = 8;
+const SPEED_START_CONFIRM_TOLERANCE_KMH = 10;
+const SPEED_MAX_PLAUSIBLE_KMH = 120;
+const SPEED_JUMP_MARGIN_KMH = 35;
+const SPEED_JUMP_FACTOR = 1.8;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -187,6 +197,7 @@ let currentMarker: maplibregl.Marker | null = null;
 let hasCenteredOnUser = false;
 let lastReading: GpsReading | null = null;
 let lastSmoothedSpeedKmh: number | null = null;
+let pendingStartSpeedKmh: number | null = null;
 let stopGps: (() => void) | null = null;
 let weatherForecast: WeatherForecast | null = null;
 let selectedWeatherPeriod: WeatherPeriod = "now";
@@ -289,6 +300,7 @@ speedToggleEl.addEventListener("click", () => {
 
   if (!isSpeedPanelOpen) {
     lastSmoothedSpeedKmh = null;
+    pendingStartSpeedKmh = null;
     speedEl.textContent = "--";
   } else if (lastReading) {
     renderSpeed(lastReading);
@@ -453,36 +465,95 @@ function setWeatherStatus(message: string) {
 }
 
 function getDisplaySpeedKmh(reading: GpsReading): number | null {
-  const nativeSpeed = reading.speedMetersPerSecond;
-
-  if (typeof nativeSpeed === "number" && Number.isFinite(nativeSpeed) && nativeSpeed >= 0) {
-    return smoothSpeed(nativeSpeed * 3.6);
-  }
-
   const previous = lastReading;
+  const nativeSpeedKmh = getNativeSpeedKmh(reading);
 
   if (!previous || previous.timestamp === reading.timestamp) {
-    return null;
+    return applySpeedGuards(nativeSpeedKmh);
   }
 
   if (reading.accuracy > SPEED_MIN_ACCURACY_METERS || previous.accuracy > SPEED_MIN_ACCURACY_METERS) {
-    return lastSmoothedSpeedKmh;
+    return nativeSpeedKmh === null ? lastSmoothedSpeedKmh : applySpeedGuards(nativeSpeedKmh);
   }
 
   const elapsedSeconds = (reading.timestamp - previous.timestamp) / 1000;
 
-  if (elapsedSeconds <= 0) {
+  if (elapsedSeconds < SPEED_MIN_ELAPSED_SECONDS) {
     return lastSmoothedSpeedKmh;
   }
 
   const distanceMeters = haversineDistanceMeters(previous, reading);
+  const stationaryDistanceMeters = Math.max(
+    SPEED_MIN_DISTANCE_METERS,
+    Math.min(previous.accuracy, reading.accuracy) * SPEED_STATIONARY_ACCURACY_RATIO
+  );
+
+  if (distanceMeters <= stationaryDistanceMeters) {
+    return nativeSpeedKmh === null ? smoothSpeed(0) : applySpeedGuards(nativeSpeedKmh);
+  }
+
   const computedKmh = (distanceMeters / elapsedSeconds) * 3.6;
 
   if (!Number.isFinite(computedKmh) || computedKmh < 0) {
     return lastSmoothedSpeedKmh;
   }
 
-  return smoothSpeed(computedKmh);
+  if (nativeSpeedKmh !== null && computedKmh <= SPEED_MAX_PLAUSIBLE_KMH) {
+    return applySpeedGuards(nativeSpeedKmh);
+  }
+
+  return applySpeedGuards(computedKmh);
+}
+
+function getNativeSpeedKmh(reading: GpsReading): number | null {
+  const nativeSpeed = reading.speedMetersPerSecond;
+
+  if (typeof nativeSpeed !== "number" || !Number.isFinite(nativeSpeed) || nativeSpeed < 0) {
+    return null;
+  }
+
+  return nativeSpeed * 3.6;
+}
+
+function applySpeedGuards(nextKmh: number | null): number | null {
+  if (nextKmh === null) {
+    return lastSmoothedSpeedKmh;
+  }
+
+  if (!Number.isFinite(nextKmh) || nextKmh < 0 || nextKmh > SPEED_MAX_PLAUSIBLE_KMH) {
+    lastSmoothedSpeedKmh = null;
+    return null;
+  }
+
+  const guardedKmh = nextKmh < SPEED_ZERO_THRESHOLD_KMH ? 0 : nextKmh;
+
+  if (
+    lastSmoothedSpeedKmh !== null &&
+    lastSmoothedSpeedKmh <= SPEED_NEAR_ZERO_KMH &&
+    guardedKmh >= SPEED_START_CONFIRM_KMH
+  ) {
+    if (
+      pendingStartSpeedKmh === null ||
+      Math.abs(pendingStartSpeedKmh - guardedKmh) > SPEED_START_CONFIRM_TOLERANCE_KMH
+    ) {
+      pendingStartSpeedKmh = guardedKmh;
+      return lastSmoothedSpeedKmh;
+    }
+  } else {
+    pendingStartSpeedKmh = null;
+  }
+
+  if (
+    lastSmoothedSpeedKmh !== null &&
+    lastSmoothedSpeedKmh > 5 &&
+    guardedKmh > lastSmoothedSpeedKmh + SPEED_JUMP_MARGIN_KMH &&
+    guardedKmh > lastSmoothedSpeedKmh * SPEED_JUMP_FACTOR
+  ) {
+    return lastSmoothedSpeedKmh;
+  }
+
+  pendingStartSpeedKmh = null;
+  return smoothSpeed(guardedKmh);
 }
 
 function smoothSpeed(nextKmh: number): number {
