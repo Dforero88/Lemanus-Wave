@@ -117,16 +117,18 @@ Exigences:
 
 #### Position GPS
 
-L'utilisateur doit pouvoir activer sa position GPS.
+L'application doit demander automatiquement la position GPS au chargement.
 
 Exigences:
 
-- demander la permission de localisation;
+- demander la permission de localisation sans action utilisateur initiale;
 - afficher la position actuelle sur la carte;
 - mettre a jour la position quand l'utilisateur se deplace;
 - permettre de recentrer la carte sur la derniere position GPS connue;
 - permettre d'activer / desactiver le suivi continu de la position GPS;
 - desactiver le suivi continu si l'utilisateur deplace manuellement la carte;
+- ne plus afficher d'indication GPS dediee une fois la position acceptee et active;
+- afficher un bouton de secours `Reessayer GPS` uniquement si la permission est refusee ou si la position n'est pas disponible;
 - afficher un message clair si la permission est refusee;
 - afficher un message clair si la position n'est pas disponible.
 
@@ -243,15 +245,20 @@ Donnees initiales minimales:
 - commune;
 - pays / canton / departement si disponible.
 
-#### Cap approximatif
+#### Orientation telephone
 
-L'utilisateur doit voir son cap approximatif quand il se deplace.
+L'utilisateur doit voir l'orientation approximative de son telephone sur la carte, meme a l'arret.
 
 Exigences:
 
-- calculer le cap a partir des positions successives si le cap GPS n'est pas disponible;
-- afficher le cap seulement quand le mouvement est suffisant;
-- eviter d'afficher un cap instable a tres faible vitesse.
+- afficher un marqueur GPS avec une indication d'orientation quand les capteurs sont disponibles;
+- utiliser l'orientation du telephone, pas le cap de deplacement GPS;
+- fonctionner meme quand l'utilisateur est immobile;
+- demander l'autorisation capteur via une action utilisateur si le navigateur l'exige;
+- garder un point GPS simple si l'orientation est indisponible ou refusee;
+- permettre d'orienter la carte selon l'orientation du telephone via un toggle dedie;
+- desactiver l'orientation automatique de la carte si l'utilisateur manipule la carte manuellement;
+- en mode mock local, afficher une orientation fixe vers le sud.
 
 #### Distance vers un port ou un point
 
@@ -363,7 +370,7 @@ MVP 2 est acceptable si:
 - l'utilisateur peut choisir un port comme destination;
 - la distance vers la destination s'affiche;
 - l'ETA simple s'affiche quand la vitesse est suffisante;
-- le cap approximatif s'affiche quand le mouvement est suffisant;
+- l'orientation du telephone s'affiche sur la carte quand les capteurs sont disponibles;
 - les etats d'erreur API/GPS sont geres proprement.
 
 ## Backlog post-MVP

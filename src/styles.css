@@ -262,7 +262,7 @@ button {
   padding: 5px 7px;
 }
 
-.locate-button {
+.gps-retry-button {
   position: fixed;
   right: calc(16px + env(safe-area-inset-right));
   top: calc(16px + env(safe-area-inset-top));
@@ -277,8 +277,8 @@ button {
   backdrop-filter: blur(12px);
 }
 
-.locate-button:disabled {
-  color: rgba(226, 232, 240, 0.74);
+.gps-retry-button[hidden] {
+  display: none;
 }
 
 .gps-controls {
@@ -350,6 +350,34 @@ button {
 }
 
 .position-marker {
+  --heading: 0deg;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+}
+
+.position-marker-heading {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 24px;
+  height: 28px;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.42), rgba(14, 165, 233, 0.04));
+  clip-path: polygon(50% 0, 100% 100%, 50% 78%, 0 100%);
+  opacity: 0;
+  transform: translateX(-50%) rotate(var(--heading));
+  transform-origin: 50% 21px;
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease;
+}
+
+.position-marker-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 20px;
   height: 20px;
   border: 3px solid #ffffff;
@@ -358,6 +386,11 @@ button {
   box-shadow:
     0 0 0 6px rgba(14, 165, 233, 0.22),
     0 10px 24px rgba(2, 6, 23, 0.36);
+  transform: translate(-50%, -50%);
+}
+
+.position-marker.has-heading .position-marker-heading {
+  opacity: 1;
 }
 
 .dev-mock-badge {
@@ -401,7 +434,7 @@ button {
     font-size: 2rem;
   }
 
-  .locate-button {
+  .gps-retry-button {
     min-height: 40px;
     padding: 0 12px;
     font-size: 0.86rem;

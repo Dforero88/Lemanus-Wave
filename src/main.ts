@@ -3,6 +3,7 @@ import type { GeoJSONSourceSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import { createGpsProvider, type GpsReading } from "./gps/provider";
+import { createOrientationProvider, type OrientationReading } from "./orientation/provider";
 import {
   describeWeatherCode,
   fetchWeatherForPosition,
@@ -87,10 +88,11 @@ app.innerHTML = `
       </div>
     </section>
   </div>
-  <button id="locateButton" class="locate-button" type="button">Activer GPS</button>
+  <button id="gpsRetryButton" class="gps-retry-button" type="button" hidden>Réessayer GPS</button>
   <div class="gps-controls" aria-label="Controle GPS carte">
     <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
     <button id="followGpsButton" class="gps-map-button" type="button" aria-label="Activer le suivi GPS" aria-pressed="false">◎</button>
+    <button id="headingButton" class="gps-map-button" type="button" aria-label="Activer l'orientation telephone" aria-pressed="false">▲</button>
   </div>
   <div class="map-legend">Limite indicative 300 m</div>
   <div id="statusMessage" class="status-message" hidden></div>
@@ -114,9 +116,10 @@ const weatherWindArrow = document.querySelector<HTMLElement>("#weatherWindArrow"
 const weatherWindDirection = document.querySelector<HTMLElement>("#weatherWindDirection");
 const weatherRain = document.querySelector<HTMLElement>("#weatherRain");
 const weatherUpdatedAt = document.querySelector<HTMLElement>("#weatherUpdatedAt");
-const locateButton = document.querySelector<HTMLButtonElement>("#locateButton");
+const gpsRetryButton = document.querySelector<HTMLButtonElement>("#gpsRetryButton");
 const centerGpsButton = document.querySelector<HTMLButtonElement>("#centerGpsButton");
 const followGpsButton = document.querySelector<HTMLButtonElement>("#followGpsButton");
+const headingButton = document.querySelector<HTMLButtonElement>("#headingButton");
 const statusMessage = document.querySelector<HTMLDivElement>("#statusMessage");
 
 if (
@@ -138,9 +141,10 @@ if (
   !weatherWindDirection ||
   !weatherRain ||
   !weatherUpdatedAt ||
-  !locateButton ||
+  !gpsRetryButton ||
   !centerGpsButton ||
   !followGpsButton ||
+  !headingButton ||
   !statusMessage
 ) {
   throw new Error("Missing required UI elements");
@@ -164,9 +168,10 @@ const weatherWindArrowEl = weatherWindArrow;
 const weatherWindDirectionEl = weatherWindDirection;
 const weatherRainEl = weatherRain;
 const weatherUpdatedAtEl = weatherUpdatedAt;
-const locateEl = locateButton;
+const gpsRetryEl = gpsRetryButton;
 const centerGpsEl = centerGpsButton;
 const followGpsEl = followGpsButton;
+const headingEl = headingButton;
 const statusEl = statusMessage;
 
 const map = new maplibregl.Map({
@@ -194,11 +199,14 @@ map.addControl(
 );
 
 let currentMarker: maplibregl.Marker | null = null;
+let currentMarkerElement: HTMLElement | null = null;
 let hasCenteredOnUser = false;
 let lastReading: GpsReading | null = null;
+let lastOrientation: OrientationReading | null = null;
 let lastSmoothedSpeedKmh: number | null = null;
 let pendingStartSpeedKmh: number | null = null;
 let stopGps: (() => void) | null = null;
+let stopOrientation: (() => void) | null = null;
 let weatherForecast: WeatherForecast | null = null;
 let selectedWeatherPeriod: WeatherPeriod = "now";
 let hasLoadedInitialWeather = false;
@@ -206,9 +214,11 @@ let isWeatherLoading = false;
 let isSpeedPanelOpen = true;
 let isGpsActive = false;
 let isFollowGpsEnabled = false;
+let isHeadingMapEnabled = false;
 let isProgrammaticMapMove = false;
 
 const gpsProvider = createGpsProvider();
+const orientationProvider = createOrientationProvider();
 
 map.on("load", () => {
   map.addSource("leman-300m-indicative", {
@@ -229,7 +239,7 @@ map.on("load", () => {
   });
 });
 
-locateEl.addEventListener("click", () => {
+gpsRetryEl.addEventListener("click", () => {
   startGps();
 });
 
@@ -260,9 +270,28 @@ followGpsEl.addEventListener("click", () => {
   }
 });
 
+headingEl.addEventListener("click", () => {
+  if (!stopOrientation) {
+    void startOrientation({ rotateMap: true });
+    return;
+  }
+
+  setHeadingMapEnabled(!isHeadingMapEnabled);
+});
+
 map.on("dragstart", disableFollowOnUserMove);
 map.on("zoomstart", disableFollowOnUserMove);
 map.on("rotatestart", disableFollowOnUserMove);
+map.on("rotate", () => {
+  if (lastOrientation) {
+    renderOrientation(lastOrientation);
+  }
+});
+
+startGps();
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock") {
+  void startOrientation({ rotateMap: false });
+}
 
 function startGps() {
   if (isGpsActive) {
@@ -270,9 +299,8 @@ function startGps() {
   }
 
   isGpsActive = true;
-  locateEl.disabled = true;
-  locateEl.textContent = "GPS actif";
-  setStatus("Recherche de la position...");
+  gpsRetryEl.hidden = true;
+  setStatus(null);
 
   stopGps = gpsProvider.watch(
     (reading) => {
@@ -285,9 +313,8 @@ function startGps() {
       setStatus(null);
     },
     (message) => {
-      locateEl.disabled = false;
-      locateEl.textContent = "Activer GPS";
       isGpsActive = false;
+      gpsRetryEl.hidden = false;
       weatherRefreshEl.disabled = true;
       setFollowGps(false);
       setStatus(message);
@@ -332,6 +359,7 @@ weatherPlus1hTabEl.addEventListener("click", () => {
 
 window.addEventListener("beforeunload", () => {
   stopGps?.();
+  stopOrientation?.();
 });
 
 function renderReading(reading: GpsReading) {
@@ -340,11 +368,17 @@ function renderReading(reading: GpsReading) {
   if (!currentMarker) {
     const markerElement = document.createElement("div");
     markerElement.className = "position-marker";
+    markerElement.innerHTML = '<span class="position-marker-heading"></span><span class="position-marker-dot"></span>';
+    currentMarkerElement = markerElement;
     currentMarker = new maplibregl.Marker({ element: markerElement, anchor: "center" })
       .setLngLat(lngLat)
       .addTo(map);
   } else {
     currentMarker.setLngLat(lngLat);
+  }
+
+  if (lastOrientation) {
+    renderOrientation(lastOrientation);
   }
 
   if (!hasCenteredOnUser) {
@@ -368,11 +402,20 @@ function centerOnGps(reading: GpsReading) {
 
 function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: number }) {
   isProgrammaticMapMove = true;
-  map.easeTo({
+  const cameraOptions: maplibregl.EaseToOptions = {
     center: [reading.longitude, reading.latitude],
-    zoom: options.zoom,
     duration: options.duration
-  });
+  };
+
+  if (options.zoom !== undefined) {
+    cameraOptions.zoom = options.zoom;
+  }
+
+  if (isHeadingMapEnabled && lastOrientation) {
+    cameraOptions.bearing = lastOrientation.headingDegrees;
+  }
+
+  map.easeTo(cameraOptions);
   window.setTimeout(() => {
     isProgrammaticMapMove = false;
   }, options.duration + 80);
@@ -385,10 +428,84 @@ function setFollowGps(enabled: boolean) {
   followGpsEl.setAttribute("aria-label", enabled ? "Desactiver le suivi GPS" : "Activer le suivi GPS");
 }
 
+function setHeadingMapEnabled(enabled: boolean) {
+  isHeadingMapEnabled = enabled;
+  headingEl.classList.toggle("is-active", enabled);
+  headingEl.setAttribute("aria-pressed", enabled ? "true" : "false");
+  headingEl.setAttribute(
+    "aria-label",
+    enabled ? "Desactiver l'orientation de la carte" : "Orienter la carte selon le telephone"
+  );
+
+  if (enabled && lastOrientation) {
+    rotateMapToHeading(lastOrientation.headingDegrees, 350);
+  }
+}
+
 function disableFollowOnUserMove() {
   if (!isProgrammaticMapMove && isFollowGpsEnabled) {
     setFollowGps(false);
   }
+
+  if (!isProgrammaticMapMove && isHeadingMapEnabled) {
+    setHeadingMapEnabled(false);
+  }
+}
+
+async function startOrientation(options: { rotateMap: boolean }) {
+  let hasOrientationError = false;
+
+  try {
+    const stop = await orientationProvider.watch(
+      (reading) => {
+        lastOrientation = reading;
+        renderOrientation(reading);
+
+        if (isHeadingMapEnabled) {
+          rotateMapToHeading(reading.headingDegrees, 180);
+        }
+      },
+      (message) => {
+        hasOrientationError = true;
+        stopOrientation = null;
+        setHeadingMapEnabled(false);
+        setStatus(message);
+      }
+    );
+
+    if (hasOrientationError) {
+      return;
+    }
+
+    stopOrientation = stop;
+
+    if (options.rotateMap) {
+      setHeadingMapEnabled(true);
+    }
+  } catch {
+    setHeadingMapEnabled(false);
+    setStatus("Orientation indisponible.");
+  }
+}
+
+function renderOrientation(reading: OrientationReading) {
+  if (!currentMarkerElement) {
+    return;
+  }
+
+  currentMarkerElement.classList.add("has-heading");
+  currentMarkerElement.style.setProperty("--heading", `${reading.headingDegrees - map.getBearing()}deg`);
+}
+
+function rotateMapToHeading(headingDegrees: number, duration: number) {
+  isProgrammaticMapMove = true;
+  map.easeTo({
+    bearing: headingDegrees,
+    duration
+  });
+  window.setTimeout(() => {
+    isProgrammaticMapMove = false;
+  }, duration + 80);
 }
 
 function renderSpeed(reading: GpsReading) {

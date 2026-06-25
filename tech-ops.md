@@ -57,14 +57,34 @@ Rules:
 
 Recommended mock behavior:
 
-- fixed position on the Leman when `Activer GPS` is clicked;
+- fixed position on the Leman when the app starts;
 - no simulated movement;
 - no simulated speed;
 - speed may remain unavailable in mock mode.
 
+## GPS behavior
+
+The app asks for location automatically on startup and then receives updates through the browser Geolocation API.
+
+Once GPS is accepted and active, no dedicated GPS status or activation button should remain visible. A `Reessayer GPS` fallback button is displayed only after a permission refusal or location error.
+
+## Phone orientation behavior
+
+Phone orientation is separate from GPS movement heading.
+
+Rules:
+
+- use device orientation sensors to display where the phone is pointing;
+- do not infer this feature from GPS movement;
+- keep the GPS marker as a simple dot when orientation is unavailable or refused;
+- ask for device orientation permission only from a user action when the browser requires it;
+- allow the user to rotate the map according to phone orientation via a dedicated map control;
+- disable map-orientation mode when the user manipulates the map manually;
+- in local mock GPS mode, use a fixed south-facing orientation.
+
 ## Speed calculation
 
-The app receives location updates through the browser Geolocation API after the user clicks `Activer GPS`.
+Speed is derived from the latest GPS readings only while the speed panel is open.
 
 Speed behavior:
 
