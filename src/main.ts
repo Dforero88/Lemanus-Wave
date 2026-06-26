@@ -214,7 +214,8 @@ const geolocateControl = IS_MOCK_GPS_MODE
         timeout: 12000
       },
       fitBoundsOptions: {
-        maxZoom: 15
+        maxZoom: 15,
+        duration: 0
       },
       trackUserLocation: true,
       showAccuracyCircle: false,
@@ -265,6 +266,7 @@ let isSpeedPanelOpen = true;
 let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
+let isUserInteractingWithMap = false;
 let isUserZoomingMap = false;
 let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
@@ -347,14 +349,18 @@ headingEl.addEventListener("click", () => {
 });
 
 map.on("dragstart", disableAutoMapModesOnUserMove);
+map.on("dragend", resumeAutomaticMapHeading);
 map.on("rotatestart", disableAutoMapModesOnUserMove);
+map.on("rotateend", resumeAutomaticMapHeading);
 map.on("zoomstart", (event) => {
   if (event.originalEvent) {
+    isUserInteractingWithMap = true;
     isUserZoomingMap = true;
   }
 });
 map.on("zoomend", () => {
   isUserZoomingMap = false;
+  isUserInteractingWithMap = false;
   if (IS_MOCK_GPS_MODE) {
     syncCamera(FOLLOW_CAMERA_DURATION_MS);
   } else if (isHeadingMapEnabled && lastOrientation) {
@@ -366,6 +372,11 @@ map.on("rotate", () => {
     renderOrientation(lastOrientation);
   }
 });
+
+const mapCanvas = map.getCanvas();
+mapCanvas.addEventListener("touchstart", pauseAutomaticMapHeading, { passive: true });
+mapCanvas.addEventListener("touchend", resumeAutomaticMapHeading, { passive: true });
+mapCanvas.addEventListener("touchcancel", resumeAutomaticMapHeading, { passive: true });
 
 startGps();
 if (IS_MOCK_GPS_MODE) {
@@ -534,7 +545,7 @@ function disableAutoMapModesOnUserMove(event?: { originalEvent?: unknown }) {
     return;
   }
 
-  map.stop();
+  isUserInteractingWithMap = true;
 
   if (IS_MOCK_GPS_MODE && isFollowGpsEnabled) {
     setFollowGps(false);
@@ -543,6 +554,20 @@ function disableAutoMapModesOnUserMove(event?: { originalEvent?: unknown }) {
   if (isHeadingMapEnabled) {
     setHeadingMapEnabled(false);
   }
+}
+
+function pauseAutomaticMapHeading() {
+  isUserInteractingWithMap = true;
+}
+
+function resumeAutomaticMapHeading() {
+  window.setTimeout(() => {
+    isUserInteractingWithMap = false;
+
+    if (isHeadingMapEnabled && lastOrientation) {
+      applyMapHeading(lastOrientation.headingDegrees);
+    }
+  }, 120);
 }
 
 function handleGpsReading(reading: GpsReading) {
@@ -681,7 +706,13 @@ function syncCamera(duration: number) {
 }
 
 function applyMapHeading(headingDegrees: number) {
-  if (!isHeadingMapEnabled || isUserZoomingMap || !shouldApplyMapHeading(headingDegrees)) {
+  if (
+    !isHeadingMapEnabled ||
+    isUserInteractingWithMap ||
+    isUserZoomingMap ||
+    map.isMoving() ||
+    !shouldApplyMapHeading(headingDegrees)
+  ) {
     return;
   }
 

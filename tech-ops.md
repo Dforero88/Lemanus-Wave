@@ -75,6 +75,8 @@ Rules:
 - keep custom controls as UI only, wired to the MapLibre geolocate control;
 - keep custom panels, weather, speed, and marker orientation as consumers of GPS readings;
 - do not duplicate MapLibre's GPS follow-camera engine with a parallel custom camera loop in production;
+- do not call `map.stop()` from app-level gesture handlers; let MapLibre handle touch gestures and camera interruption;
+- suspend automatic map-bearing updates while the user is touching, zooming, dragging, or rotating the map;
 - keep the local mock GPS provider separate because it is a development-only simulation.
 
 Once GPS is accepted and active, no dedicated GPS status or activation button should remain visible. A `Reessayer GPS` fallback button is displayed only after a permission refusal or location error.
