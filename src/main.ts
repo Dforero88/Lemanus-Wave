@@ -33,6 +33,7 @@ const HEADING_MAP_MIN_ROTATION_INTERVAL_MS = 250;
 const HEADING_MARKER_MIN_RENDER_DELTA_DEGREES = 1;
 const HEADING_MARKER_MIN_RENDER_INTERVAL_MS = 120;
 const FOLLOW_CAMERA_DURATION_MS = 250;
+const IS_MOCK_GPS_MODE = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -204,6 +205,47 @@ map.addControl(
   "bottom-right"
 );
 
+const geolocateControl = IS_MOCK_GPS_MODE
+  ? null
+  : new maplibregl.GeolocateControl({
+      positionOptions: {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 12000
+      },
+      fitBoundsOptions: {
+        maxZoom: 15
+      },
+      trackUserLocation: true,
+      showAccuracyCircle: false,
+      showUserLocation: false
+    });
+
+if (geolocateControl) {
+  map.addControl(geolocateControl, "bottom-right");
+  geolocateControl.on("geolocate", (event) => {
+    handleGpsReading(createReadingFromGeolocateEvent(event));
+  });
+  geolocateControl.on("error", (event) => {
+    handleGpsError(getGpsErrorMessage(event));
+  });
+  geolocateControl.on("trackuserlocationstart", () => {
+    isGpsActive = true;
+    gpsRetryEl.hidden = true;
+    setFollowGps(true);
+    setStatus(null);
+  });
+  geolocateControl.on("userlocationfocus", () => {
+    setFollowGps(true);
+  });
+  geolocateControl.on("trackuserlocationend", () => {
+    setFollowGps(false);
+  });
+  geolocateControl.on("userlocationlostfocus", () => {
+    setFollowGps(false);
+  });
+}
+
 let currentMarker: maplibregl.Marker | null = null;
 let currentMarkerElement: HTMLElement | null = null;
 let hasCenteredOnUser = false;
@@ -224,13 +266,12 @@ let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
 let isUserZoomingMap = false;
-let isCameraAnimationActive = false;
 let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
 let lastRenderedHeadingDegrees: number | null = null;
 let lastHeadingMarkerRenderAt = 0;
 
-const gpsProvider = createGpsProvider();
+const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
 
 map.on("load", () => {
@@ -264,12 +305,25 @@ centerGpsEl.addEventListener("click", () => {
 
   if (lastUsableReading) {
     centerOnGps(lastUsableReading);
+  } else if (geolocateControl) {
+    geolocateControl.trigger();
   } else {
     setStatus("Position GPS en attente...");
   }
 });
 
 followGpsEl.addEventListener("click", () => {
+  if (geolocateControl) {
+    if (!isGpsActive) {
+      isGpsActive = true;
+      gpsRetryEl.hidden = true;
+      setStatus(null);
+    }
+
+    geolocateControl.trigger();
+    return;
+  }
+
   if (!isGpsActive) {
     setFollowGps(true);
     startGps();
@@ -301,7 +355,11 @@ map.on("zoomstart", (event) => {
 });
 map.on("zoomend", () => {
   isUserZoomingMap = false;
-  syncCamera(FOLLOW_CAMERA_DURATION_MS);
+  if (IS_MOCK_GPS_MODE) {
+    syncCamera(FOLLOW_CAMERA_DURATION_MS);
+  } else if (isHeadingMapEnabled && lastOrientation) {
+    applyMapHeading(lastOrientation.headingDegrees);
+  }
 });
 map.on("rotate", () => {
   if (lastOrientation) {
@@ -310,7 +368,7 @@ map.on("rotate", () => {
 });
 
 startGps();
-if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock") {
+if (IS_MOCK_GPS_MODE) {
   void startOrientation({ rotateMap: false });
 }
 
@@ -323,24 +381,19 @@ function startGps() {
   gpsRetryEl.hidden = true;
   setStatus(null);
 
-  stopGps = gpsProvider.watch(
-    (reading) => {
-      lastReading = reading;
-      renderReading(reading);
-      weatherRefreshEl.disabled = false;
-      if (!hasLoadedInitialWeather) {
-        void updateWeather(reading);
-      }
-      setStatus(null);
-    },
-    (message) => {
-      isGpsActive = false;
-      gpsRetryEl.hidden = false;
-      weatherRefreshEl.disabled = true;
-      setFollowGps(false);
-      setStatus(message);
+  if (geolocateControl) {
+    if (!geolocateControl.trigger()) {
+      handleGpsError("GPS indisponible.");
     }
-  );
+    return;
+  }
+
+  if (!gpsProvider) {
+    handleGpsError("GPS indisponible.");
+    return;
+  }
+
+  stopGps = gpsProvider.watch(handleGpsReading, handleGpsError);
 }
 
 speedToggleEl.addEventListener("click", () => {
@@ -408,7 +461,11 @@ function renderReading(reading: GpsReading) {
     renderOrientation(lastOrientation);
   }
 
-  if (!hasCenteredOnUser && isPositionUsable) {
+  if (!IS_MOCK_GPS_MODE) {
+    if (!hasCenteredOnUser && isPositionUsable) {
+      hasCenteredOnUser = true;
+    }
+  } else if (!hasCenteredOnUser && isPositionUsable) {
     moveMapToGps(reading, { zoom: Math.max(map.getZoom(), 12), duration: 800 });
     hasCenteredOnUser = true;
   } else if (isFollowGpsEnabled) {
@@ -445,11 +502,7 @@ function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: n
     cameraOptions.bearing = lastOrientation.headingDegrees;
   }
 
-  isCameraAnimationActive = true;
-  map.easeTo(cameraOptions);
-  window.setTimeout(() => {
-    isCameraAnimationActive = false;
-  }, options.duration + 80);
+  map.easeTo(cameraOptions, { geolocateSource: true });
 }
 
 function setFollowGps(enabled: boolean) {
@@ -477,24 +530,80 @@ function setHeadingMapEnabled(enabled: boolean) {
 }
 
 function disableAutoMapModesOnUserMove(event?: { originalEvent?: unknown }) {
-  const isUserMove = Boolean(event?.originalEvent);
-
-  if (!isUserMove && isCameraAnimationActive) {
+  if (!event?.originalEvent) {
     return;
   }
 
-  if (isUserMove) {
-    map.stop();
-    isCameraAnimationActive = false;
-  }
+  map.stop();
 
-  if (isFollowGpsEnabled) {
+  if (IS_MOCK_GPS_MODE && isFollowGpsEnabled) {
     setFollowGps(false);
   }
 
   if (isHeadingMapEnabled) {
     setHeadingMapEnabled(false);
   }
+}
+
+function handleGpsReading(reading: GpsReading) {
+  lastReading = reading;
+  renderReading(reading);
+  weatherRefreshEl.disabled = false;
+
+  if (!hasLoadedInitialWeather) {
+    void updateWeather(reading);
+  }
+
+  setStatus(null);
+}
+
+function handleGpsError(message: string) {
+  isGpsActive = false;
+  gpsRetryEl.hidden = false;
+  weatherRefreshEl.disabled = true;
+  setFollowGps(false);
+  setStatus(message);
+}
+
+function createReadingFromGeolocateEvent(event: unknown): GpsReading {
+  const position = event as {
+    coords?: {
+      latitude?: number;
+      longitude?: number;
+      accuracy?: number;
+      speed?: number | null;
+    };
+    timestamp?: number;
+  };
+
+  if (
+    typeof position.coords?.latitude !== "number" ||
+    typeof position.coords.longitude !== "number" ||
+    typeof position.coords.accuracy !== "number"
+  ) {
+    throw new Error("Invalid geolocation event");
+  }
+
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    timestamp: typeof position.timestamp === "number" ? position.timestamp : Date.now(),
+    speedMetersPerSecond:
+      typeof position.coords.speed === "number" && Number.isFinite(position.coords.speed)
+        ? position.coords.speed
+        : null
+  };
+}
+
+function getGpsErrorMessage(event: unknown): string {
+  const geolocationError = event as { code?: number };
+
+  if (geolocationError.code === 1) {
+    return "Permission GPS refusee.";
+  }
+
+  return "GPS indisponible.";
 }
 
 async function startOrientation(options: { rotateMap: boolean }) {
@@ -567,7 +676,7 @@ function syncCamera(duration: number) {
   }
 
   if (isHeadingMapEnabled && lastOrientation && shouldApplyMapHeading(lastOrientation.headingDegrees)) {
-    map.jumpTo({ bearing: lastOrientation.headingDegrees });
+    map.jumpTo({ bearing: lastOrientation.headingDegrees }, { geolocateSource: true });
   }
 }
 
@@ -576,7 +685,7 @@ function applyMapHeading(headingDegrees: number) {
     return;
   }
 
-  map.jumpTo({ bearing: headingDegrees });
+  map.jumpTo({ bearing: headingDegrees }, { geolocateSource: true });
 }
 
 function shouldApplyMapHeading(headingDegrees: number): boolean {

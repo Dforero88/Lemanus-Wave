@@ -64,7 +64,18 @@ Recommended mock behavior:
 
 ## GPS behavior
 
-The app asks for location automatically on startup and then receives updates through the browser Geolocation API.
+The app asks for location automatically on startup.
+
+Production GPS behavior should use `MapLibre GeolocateControl` as the GPS and follow-camera engine.
+The app UI may remain custom, but it should consume MapLibre geolocation events instead of reimplementing browser GPS tracking and follow-camera behavior.
+
+Rules:
+
+- use `MapLibre GeolocateControl` for real GPS permission, live position watch, and follow-position camera behavior;
+- keep custom controls as UI only, wired to the MapLibre geolocate control;
+- keep custom panels, weather, speed, and marker orientation as consumers of GPS readings;
+- do not duplicate MapLibre's GPS follow-camera engine with a parallel custom camera loop in production;
+- keep the local mock GPS provider separate because it is a development-only simulation.
 
 Once GPS is accepted and active, no dedicated GPS status or activation button should remain visible. A `Reessayer GPS` fallback button is displayed only after a permission refusal or location error.
 

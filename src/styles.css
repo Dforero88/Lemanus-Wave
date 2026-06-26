@@ -413,6 +413,11 @@ button {
   bottom: 8px;
 }
 
+.maplibregl-ctrl-geolocate,
+.maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) {
+  display: none;
+}
+
 @media (max-width: 420px) {
   .panel-stack {
     width: min(252px, calc(100vw - 32px));
