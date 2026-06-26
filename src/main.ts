@@ -33,6 +33,7 @@ const HEADING_MAP_MIN_ROTATION_INTERVAL_MS = 250;
 const HEADING_MARKER_MIN_RENDER_DELTA_DEGREES = 1;
 const HEADING_MARKER_MIN_RENDER_INTERVAL_MS = 120;
 const FOLLOW_CAMERA_DURATION_MS = 250;
+const DEFAULT_FOLLOW_MAX_ZOOM = 15;
 const IS_MOCK_GPS_MODE = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -242,7 +243,7 @@ const geolocateControl = IS_MOCK_GPS_MODE
         timeout: 12000
       },
       fitBoundsOptions: {
-        maxZoom: 15,
+        maxZoom: DEFAULT_FOLLOW_MAX_ZOOM,
         duration: 0
       },
       trackUserLocation: true,
@@ -296,6 +297,7 @@ let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
 let isUserInteractingWithMap = false;
 let isUserZoomingMap = false;
+let shouldPreserveFollowZoomAfterUserZoom = false;
 let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
 let lastRenderedHeadingDegrees: number | null = null;
@@ -386,11 +388,18 @@ map.on("zoomstart", (event) => {
   if (event.originalEvent) {
     isUserInteractingWithMap = true;
     isUserZoomingMap = true;
+    shouldPreserveFollowZoomAfterUserZoom = true;
   }
 });
 map.on("zoomend", () => {
   isUserZoomingMap = false;
   isUserInteractingWithMap = false;
+
+  if (shouldPreserveFollowZoomAfterUserZoom) {
+    preserveCurrentFollowZoom();
+    shouldPreserveFollowZoomAfterUserZoom = false;
+  }
+
   if (IS_MOCK_GPS_MODE) {
     syncCamera(FOLLOW_CAMERA_DURATION_MS);
   } else if (isHeadingMapEnabled && lastOrientation) {
@@ -552,9 +561,23 @@ function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: n
 
 function setFollowGps(enabled: boolean) {
   isFollowGpsEnabled = enabled;
+  if (enabled && !IS_MOCK_GPS_MODE) {
+    preserveCurrentFollowZoom();
+  }
   followGpsEl.classList.toggle("is-active", enabled);
   followGpsEl.setAttribute("aria-pressed", enabled ? "true" : "false");
   followGpsEl.setAttribute("aria-label", enabled ? "Desactiver le suivi GPS" : "Activer le suivi GPS");
+}
+
+function preserveCurrentFollowZoom() {
+  if (!geolocateControl || !isFollowGpsEnabled) {
+    return;
+  }
+
+  geolocateControl.options.fitBoundsOptions = {
+    ...geolocateControl.options.fitBoundsOptions,
+    maxZoom: map.getZoom()
+  };
 }
 
 function setHeadingMapEnabled(enabled: boolean) {
