@@ -325,6 +325,8 @@ map.on("load", () => {
       "line-dasharray": [2, 1.2]
     }
   });
+
+  startGps();
 });
 
 gpsRetryEl.addEventListener("click", () => {
@@ -417,13 +419,18 @@ mapCanvas.addEventListener("touchstart", pauseAutomaticMapHeading, { passive: tr
 mapCanvas.addEventListener("touchend", resumeAutomaticMapHeading, { passive: true });
 mapCanvas.addEventListener("touchcancel", resumeAutomaticMapHeading, { passive: true });
 
-startGps();
 if (IS_MOCK_GPS_MODE) {
   void startOrientation({ rotateMap: false });
 }
 
 function startGps() {
   if (isGpsActive) {
+    return;
+  }
+
+  if (!map.loaded()) {
+    gpsRetryEl.hidden = true;
+    setStatus(null);
     return;
   }
 
