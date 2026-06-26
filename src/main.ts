@@ -292,6 +292,7 @@ let selectedWeatherPeriod: WeatherPeriod = "now";
 let hasLoadedInitialWeather = false;
 let isWeatherLoading = false;
 let isSpeedPanelOpen = false;
+let isMapReady = false;
 let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
@@ -307,6 +308,7 @@ const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
 
 map.on("load", () => {
+  isMapReady = true;
   collapseMapAttribution();
 
   map.addSource("leman-300m-indicative", {
@@ -428,7 +430,7 @@ function startGps() {
     return;
   }
 
-  if (!map.loaded()) {
+  if (!isMapReady) {
     gpsRetryEl.hidden = true;
     setStatus(null);
     return;
