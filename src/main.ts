@@ -44,50 +44,11 @@ if (!app) {
 app.innerHTML = `
   <div id="map" aria-label="Carte du Leman"></div>
   <div class="panel-stack">
-    <section id="weatherCard" class="weather-card" aria-live="polite">
-      <header class="panel-header">
-        <span class="panel-title">Meteo</span>
-        <div class="panel-actions">
-          <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la meteo" disabled>↻</button>
-          <button id="weatherToggle" class="panel-toggle" type="button" aria-label="Masquer la meteo">−</button>
-        </div>
-      </header>
-      <div class="weather-body">
-        <div class="weather-tabs" role="group" aria-label="Periode meteo">
-          <button id="weatherNowTab" class="weather-tab is-active" type="button">Maintenant</button>
-          <button id="weatherPlus1hTab" class="weather-tab" type="button">+1h</button>
-        </div>
-        <div id="weatherStatus" class="weather-status">GPS requis</div>
-        <div id="weatherMetrics" class="weather-metrics" hidden>
-          <div class="weather-primary">
-            <span class="weather-icon-frame" aria-hidden="true">
-              <img id="weatherIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
-            </span>
-            <div class="weather-main">
-              <strong id="weatherTemp">--</strong>
-              <span id="weatherCondition">--</span>
-            </div>
-          </div>
-          <div class="metric-group">
-            <span class="metric-label">Vent</span>
-            <div class="wind-row">
-              <strong id="weatherWind">--</strong>
-              <span id="weatherWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
-            </div>
-            <span id="weatherWindDirection">--</span>
-          </div>
-          <div class="metric-group">
-            <span class="metric-label">Pluie</span>
-            <strong id="weatherRain">--</strong>
-          </div>
-          <span id="weatherUpdatedAt" class="weather-updated">--</span>
-        </div>
-      </div>
-    </section>
-    <section id="speedCard" class="speed-card" aria-live="polite">
+    <div class="map-legend">Limite indicative 300 m</div>
+    <section id="speedCard" class="speed-card is-collapsed" aria-live="polite">
       <header class="panel-header">
         <span class="panel-title">Vitesse</span>
-        <button id="speedToggle" class="panel-toggle" type="button" aria-label="Masquer la vitesse">−</button>
+        <button id="speedToggle" class="panel-toggle" type="button" aria-label="Afficher la vitesse">+</button>
       </header>
       <div class="speed-body">
         <strong id="speedValue">--</strong>
@@ -95,22 +56,84 @@ app.innerHTML = `
       </div>
     </section>
   </div>
+  <section id="weatherView" class="weather-view" aria-label="Meteo" hidden>
+    <div class="weather-screen-shell">
+      <section id="weatherCard" class="weather-card weather-screen-card" aria-live="polite">
+        <header class="panel-header weather-screen-header">
+          <div>
+            <span class="panel-title">Meteo</span>
+            <h1 class="weather-screen-title">Conditions</h1>
+          </div>
+          <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la meteo" disabled>↻</button>
+        </header>
+        <div class="weather-body">
+          <div class="weather-tabs" role="group" aria-label="Periode meteo">
+            <button id="weatherNowTab" class="weather-tab is-active" type="button">Maintenant</button>
+            <button id="weatherPlus1hTab" class="weather-tab" type="button">+1h</button>
+          </div>
+          <div id="weatherStatus" class="weather-status">GPS requis</div>
+          <div id="weatherMetrics" class="weather-metrics" hidden>
+            <div class="weather-primary">
+              <span class="weather-icon-frame" aria-hidden="true">
+                <img id="weatherIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
+              </span>
+              <div class="weather-main">
+                <strong id="weatherTemp">--</strong>
+                <span id="weatherCondition">--</span>
+              </div>
+            </div>
+            <div class="metric-group">
+              <span class="metric-label">Vent</span>
+              <div class="wind-row">
+                <strong id="weatherWind">--</strong>
+                <span id="weatherWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
+              </div>
+              <span id="weatherWindDirection">--</span>
+            </div>
+            <div class="metric-group">
+              <span class="metric-label">Pluie</span>
+              <strong id="weatherRain">--</strong>
+            </div>
+            <span id="weatherUpdatedAt" class="weather-updated">--</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
   <button id="gpsRetryButton" class="gps-retry-button" type="button" hidden>Réessayer GPS</button>
   <div class="gps-controls" aria-label="Controle GPS carte">
     <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
     <button id="followGpsButton" class="gps-map-button" type="button" aria-label="Activer le suivi GPS" aria-pressed="false">◎</button>
     <button id="headingButton" class="gps-map-button" type="button" aria-label="Activer l'orientation telephone" aria-pressed="false">▲</button>
   </div>
-  <div class="map-legend">Limite indicative 300 m</div>
   <div id="statusMessage" class="status-message" hidden></div>
+  <nav class="bottom-nav" aria-label="Navigation principale">
+    <button id="mapTab" class="bottom-nav-button is-active" type="button" aria-label="Afficher la carte" aria-current="page">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"></path>
+        <path d="M9 3v15"></path>
+        <path d="M15 6v15"></path>
+      </svg>
+      <span>Carte</span>
+    </button>
+    <button id="weatherTab" class="bottom-nav-button" type="button" aria-label="Afficher la meteo">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17.5 18H8a5 5 0 1 1 1.1-9.9A6 6 0 0 1 20 11.5 3.5 3.5 0 0 1 17.5 18z"></path>
+        <path d="M8 21h.01"></path>
+        <path d="M12 21h.01"></path>
+        <path d="M16 21h.01"></path>
+      </svg>
+      <span>Meteo</span>
+    </button>
+  </nav>
 `;
 
 const speedValue = document.querySelector<HTMLElement>("#speedValue");
 const speedCard = document.querySelector<HTMLElement>("#speedCard");
 const speedToggle = document.querySelector<HTMLButtonElement>("#speedToggle");
+const weatherView = document.querySelector<HTMLElement>("#weatherView");
 const weatherCard = document.querySelector<HTMLElement>("#weatherCard");
 const weatherRefresh = document.querySelector<HTMLButtonElement>("#weatherRefresh");
-const weatherToggle = document.querySelector<HTMLButtonElement>("#weatherToggle");
 const weatherNowTab = document.querySelector<HTMLButtonElement>("#weatherNowTab");
 const weatherPlus1hTab = document.querySelector<HTMLButtonElement>("#weatherPlus1hTab");
 const weatherStatus = document.querySelector<HTMLElement>("#weatherStatus");
@@ -128,14 +151,16 @@ const centerGpsButton = document.querySelector<HTMLButtonElement>("#centerGpsBut
 const followGpsButton = document.querySelector<HTMLButtonElement>("#followGpsButton");
 const headingButton = document.querySelector<HTMLButtonElement>("#headingButton");
 const statusMessage = document.querySelector<HTMLDivElement>("#statusMessage");
+const mapTab = document.querySelector<HTMLButtonElement>("#mapTab");
+const weatherTab = document.querySelector<HTMLButtonElement>("#weatherTab");
 
 if (
   !speedValue ||
   !speedCard ||
   !speedToggle ||
+  !weatherView ||
   !weatherCard ||
   !weatherRefresh ||
-  !weatherToggle ||
   !weatherNowTab ||
   !weatherPlus1hTab ||
   !weatherStatus ||
@@ -152,7 +177,9 @@ if (
   !centerGpsButton ||
   !followGpsButton ||
   !headingButton ||
-  !statusMessage
+  !statusMessage ||
+  !mapTab ||
+  !weatherTab
 ) {
   throw new Error("Missing required UI elements");
 }
@@ -160,9 +187,8 @@ if (
 const speedEl = speedValue;
 const speedCardEl = speedCard;
 const speedToggleEl = speedToggle;
-const weatherCardEl = weatherCard;
+const weatherViewEl = weatherView;
 const weatherRefreshEl = weatherRefresh;
-const weatherToggleEl = weatherToggle;
 const weatherNowTabEl = weatherNowTab;
 const weatherPlus1hTabEl = weatherPlus1hTab;
 const weatherStatusEl = weatherStatus;
@@ -180,6 +206,8 @@ const centerGpsEl = centerGpsButton;
 const followGpsEl = followGpsButton;
 const headingEl = headingButton;
 const statusEl = statusMessage;
+const mapTabEl = mapTab;
+const weatherTabEl = weatherTab;
 
 const map = new maplibregl.Map({
   container: "map",
@@ -191,11 +219,11 @@ const map = new maplibregl.Map({
 
 map.addControl(
   new maplibregl.AttributionControl({
-    compact: true,
-    customAttribution: 'Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    compact: true
   }),
   "bottom-right"
 );
+collapseMapAttribution();
 
 map.addControl(
   new maplibregl.NavigationControl({
@@ -262,7 +290,7 @@ let weatherForecast: WeatherForecast | null = null;
 let selectedWeatherPeriod: WeatherPeriod = "now";
 let hasLoadedInitialWeather = false;
 let isWeatherLoading = false;
-let isSpeedPanelOpen = true;
+let isSpeedPanelOpen = false;
 let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
@@ -277,6 +305,8 @@ const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
 
 map.on("load", () => {
+  collapseMapAttribution();
+
   map.addSource("leman-300m-indicative", {
     type: "geojson",
     data: "/data/leman-300m-indicative.geojson"
@@ -420,8 +450,12 @@ speedToggleEl.addEventListener("click", () => {
   }
 });
 
-weatherToggleEl.addEventListener("click", () => {
-  togglePanel(weatherCardEl, weatherToggleEl, "meteo");
+mapTabEl.addEventListener("click", () => {
+  setActiveView("map");
+});
+
+weatherTabEl.addEventListener("click", () => {
+  setActiveView("weather");
 });
 
 weatherRefreshEl.addEventListener("click", () => {
@@ -815,6 +849,39 @@ function setWeatherStatus(message: string) {
   weatherMetricsEl.hidden = true;
   weatherStatusEl.hidden = false;
   weatherStatusEl.textContent = message;
+}
+
+function setActiveView(view: "map" | "weather") {
+  const isWeatherView = view === "weather";
+
+  weatherViewEl.hidden = !isWeatherView;
+  mapTabEl.classList.toggle("is-active", !isWeatherView);
+  weatherTabEl.classList.toggle("is-active", isWeatherView);
+
+  if (isWeatherView) {
+    mapTabEl.removeAttribute("aria-current");
+    weatherTabEl.setAttribute("aria-current", "page");
+  } else {
+    mapTabEl.setAttribute("aria-current", "page");
+    weatherTabEl.removeAttribute("aria-current");
+  }
+
+  if (!isWeatherView) {
+    map.resize();
+    collapseMapAttribution();
+  }
+}
+
+function collapseMapAttribution() {
+  const attribution = document.querySelector<HTMLDetailsElement>(".maplibregl-ctrl-attrib");
+
+  if (!attribution) {
+    return;
+  }
+
+  attribution.open = false;
+  attribution.removeAttribute("open");
+  attribution.classList.remove("maplibregl-compact-show");
 }
 
 function getDisplaySpeedKmh(reading: GpsReading): number | null {
