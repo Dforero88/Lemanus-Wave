@@ -82,8 +82,9 @@ Rules:
 - disable map-orientation mode when the user drags or rotates the map manually;
 - allow manual zoom without disabling follow-position or map-orientation modes;
 - stop any active automatic map animation when the user starts dragging or rotating the map;
-- combine follow-position and map-orientation updates through one camera sync path;
-- use the latest usable GPS reading for marker and camera updates, not necessarily the latest raw GPS reading;
+- update the GPS marker from raw GPS readings, even if accuracy is weak;
+- use the latest usable GPS reading for automatic camera centering;
+- pause automatic camera heading updates while the user is zooming, then resume after zoom ends;
 - throttle automatic map bearing updates to avoid fighting user gestures and stacking map animations;
 - throttle marker heading rendering separately from map rotation;
 - in local mock GPS mode, use a fixed south-facing orientation.

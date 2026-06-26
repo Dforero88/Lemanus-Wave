@@ -32,6 +32,7 @@ const HEADING_MAP_MIN_ROTATION_DELTA_DEGREES = 2;
 const HEADING_MAP_MIN_ROTATION_INTERVAL_MS = 250;
 const HEADING_MARKER_MIN_RENDER_DELTA_DEGREES = 1;
 const HEADING_MARKER_MIN_RENDER_INTERVAL_MS = 120;
+const FOLLOW_CAMERA_DURATION_MS = 250;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -222,10 +223,8 @@ let isSpeedPanelOpen = true;
 let isGpsActive = false;
 let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
-let isProgrammaticMapMove = false;
-let cameraMoveToken = 0;
-let pendingCameraSync = false;
-let pendingCameraDuration = 180;
+let isUserZoomingMap = false;
+let isCameraAnimationActive = false;
 let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
 let lastRenderedHeadingDegrees: number | null = null;
@@ -295,6 +294,15 @@ headingEl.addEventListener("click", () => {
 
 map.on("dragstart", disableAutoMapModesOnUserMove);
 map.on("rotatestart", disableAutoMapModesOnUserMove);
+map.on("zoomstart", (event) => {
+  if (event.originalEvent) {
+    isUserZoomingMap = true;
+  }
+});
+map.on("zoomend", () => {
+  isUserZoomingMap = false;
+  syncCamera(FOLLOW_CAMERA_DURATION_MS);
+});
 map.on("rotate", () => {
   if (lastOrientation) {
     renderOrientation(lastOrientation);
@@ -380,16 +388,7 @@ function renderReading(reading: GpsReading) {
   const lngLat: [number, number] = [reading.longitude, reading.latitude];
   const isPositionUsable = isUsablePositionReading(reading);
 
-  if (!isPositionUsable) {
-    if (isSpeedPanelOpen) {
-      renderSpeed(reading);
-    }
-    return;
-  }
-
-  lastUsableReading = reading;
-
-  if (!currentMarker && isPositionUsable) {
+  if (!currentMarker) {
     const markerElement = document.createElement("div");
     markerElement.className = "position-marker";
     markerElement.innerHTML = '<span class="position-marker-heading"></span><span class="position-marker-dot"></span>';
@@ -397,19 +396,23 @@ function renderReading(reading: GpsReading) {
     currentMarker = new maplibregl.Marker({ element: markerElement, anchor: "center" })
       .setLngLat(lngLat)
       .addTo(map);
-  } else if (currentMarker && isPositionUsable) {
+  } else {
     currentMarker.setLngLat(lngLat);
+  }
+
+  if (isPositionUsable) {
+    lastUsableReading = reading;
   }
 
   if (lastOrientation) {
     renderOrientation(lastOrientation);
   }
 
-  if (!hasCenteredOnUser) {
+  if (!hasCenteredOnUser && isPositionUsable) {
     moveMapToGps(reading, { zoom: Math.max(map.getZoom(), 12), duration: 800 });
     hasCenteredOnUser = true;
   } else if (isFollowGpsEnabled) {
-    requestCameraSync(300);
+    syncCamera(FOLLOW_CAMERA_DURATION_MS);
   }
 
   if (isSpeedPanelOpen) {
@@ -425,6 +428,10 @@ function centerOnGps(reading: GpsReading) {
 }
 
 function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: number }) {
+  if (isUserZoomingMap) {
+    return;
+  }
+
   const cameraOptions: maplibregl.EaseToOptions = {
     center: [reading.longitude, reading.latitude],
     duration: options.duration
@@ -438,7 +445,11 @@ function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: n
     cameraOptions.bearing = lastOrientation.headingDegrees;
   }
 
-  runCameraEase(cameraOptions, options.duration);
+  isCameraAnimationActive = true;
+  map.easeTo(cameraOptions);
+  window.setTimeout(() => {
+    isCameraAnimationActive = false;
+  }, options.duration + 80);
 }
 
 function setFollowGps(enabled: boolean) {
@@ -458,7 +469,7 @@ function setHeadingMapEnabled(enabled: boolean) {
   );
 
   if (enabled && lastOrientation) {
-    requestCameraSync(350);
+    applyMapHeading(lastOrientation.headingDegrees);
   } else if (!enabled) {
     lastAppliedMapHeadingDegrees = null;
     lastHeadingMapRotationAt = 0;
@@ -468,14 +479,13 @@ function setHeadingMapEnabled(enabled: boolean) {
 function disableAutoMapModesOnUserMove(event?: { originalEvent?: unknown }) {
   const isUserMove = Boolean(event?.originalEvent);
 
-  if (!isUserMove && isProgrammaticMapMove) {
+  if (!isUserMove && isCameraAnimationActive) {
     return;
   }
 
   if (isUserMove) {
     map.stop();
-    cameraMoveToken += 1;
-    isProgrammaticMapMove = false;
+    isCameraAnimationActive = false;
   }
 
   if (isFollowGpsEnabled) {
@@ -497,7 +507,7 @@ async function startOrientation(options: { rotateMap: boolean }) {
         renderOrientation(reading);
 
         if (isHeadingMapEnabled) {
-          requestCameraSync(180);
+          applyMapHeading(reading.headingDegrees);
         }
       },
       (message) => {
@@ -546,40 +556,27 @@ function renderOrientation(reading: OrientationReading) {
   currentMarkerElement.style.setProperty("--heading", `${reading.headingDegrees - map.getBearing()}deg`);
 }
 
-function requestCameraSync(duration: number) {
-  pendingCameraDuration = Math.max(pendingCameraDuration, duration);
-
-  if (pendingCameraSync) {
+function syncCamera(duration: number) {
+  if (isUserZoomingMap) {
     return;
   }
 
-  pendingCameraSync = true;
-  window.requestAnimationFrame(() => {
-    const syncDuration = pendingCameraDuration;
-    pendingCameraSync = false;
-    pendingCameraDuration = 180;
-    syncCamera(syncDuration);
-  });
-}
-
-function syncCamera(duration: number) {
-  const cameraOptions: maplibregl.EaseToOptions = {
-    duration
-  };
-
   if (isFollowGpsEnabled && lastUsableReading) {
-    cameraOptions.center = [lastUsableReading.longitude, lastUsableReading.latitude];
+    moveMapToGps(lastUsableReading, { duration });
+    return;
   }
 
   if (isHeadingMapEnabled && lastOrientation && shouldApplyMapHeading(lastOrientation.headingDegrees)) {
-    cameraOptions.bearing = lastOrientation.headingDegrees;
+    map.jumpTo({ bearing: lastOrientation.headingDegrees });
   }
+}
 
-  if (!("center" in cameraOptions) && !("bearing" in cameraOptions)) {
+function applyMapHeading(headingDegrees: number) {
+  if (!isHeadingMapEnabled || isUserZoomingMap || !shouldApplyMapHeading(headingDegrees)) {
     return;
   }
 
-  runCameraEase(cameraOptions, duration);
+  map.jumpTo({ bearing: headingDegrees });
 }
 
 function shouldApplyMapHeading(headingDegrees: number): boolean {
@@ -597,18 +594,6 @@ function shouldApplyMapHeading(headingDegrees: number): boolean {
   lastAppliedMapHeadingDegrees = headingDegrees;
   lastHeadingMapRotationAt = now;
   return true;
-}
-
-function runCameraEase(cameraOptions: maplibregl.EaseToOptions, duration: number) {
-  const token = cameraMoveToken + 1;
-  cameraMoveToken = token;
-  isProgrammaticMapMove = true;
-  map.easeTo(cameraOptions);
-  window.setTimeout(() => {
-    if (cameraMoveToken === token) {
-      isProgrammaticMapMove = false;
-    }
-  }, duration + 80);
 }
 
 function isUsablePositionReading(reading: GpsReading): boolean {
