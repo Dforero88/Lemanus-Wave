@@ -187,7 +187,7 @@ button {
   color: #ffffff;
   background: transparent;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 16px;
 }
 
 .place-search-form input::placeholder {
