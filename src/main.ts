@@ -116,6 +116,27 @@ app.innerHTML = `
       </section>
     </div>
   </section>
+  <section id="settingsView" class="settings-view" aria-label="Reglages" hidden>
+    <div class="settings-screen-shell">
+      <section class="settings-card">
+        <header class="settings-header">
+          <span class="panel-title">Reglages</span>
+          <h1 class="settings-title">Navigation</h1>
+        </header>
+        <div class="settings-list">
+          <div class="setting-row">
+            <div class="setting-copy">
+              <strong>Ecran actif</strong>
+              <span id="wakeLockStatus">Garde l'ecran allume pendant que l'app est visible.</span>
+            </div>
+            <button id="wakeLockToggle" class="setting-switch" type="button" role="switch" aria-checked="false" aria-label="Garder l'ecran actif">
+              <span></span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
   <button id="gpsRetryButton" class="gps-retry-button" type="button" hidden>Réessayer GPS</button>
   <div class="gps-controls" aria-label="Controle GPS carte">
     <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
@@ -130,7 +151,6 @@ app.innerHTML = `
         <path d="M9 3v15"></path>
         <path d="M15 6v15"></path>
       </svg>
-      <span>Carte</span>
     </button>
     <button id="weatherTab" class="bottom-nav-button" type="button" aria-label="Afficher la meteo">
       <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -139,7 +159,12 @@ app.innerHTML = `
         <path d="M12 21h.01"></path>
         <path d="M16 21h.01"></path>
       </svg>
-      <span>Meteo</span>
+    </button>
+    <button id="settingsTab" class="bottom-nav-button" type="button" aria-label="Afficher les reglages">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path>
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .92l-.03.08a2 2 0 0 1-3.74 0l-.03-.08a1.7 1.7 0 0 0-1-.92 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.92-1l-.08-.03a2 2 0 0 1 0-3.74l.08-.03a1.7 1.7 0 0 0 .92-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.92l.03-.08a2 2 0 0 1 3.74 0l.03.08a1.7 1.7 0 0 0 1 .92 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.37.15.68.48.92 1l.08.03a2 2 0 0 1 0 3.74l-.08.03a1.7 1.7 0 0 0-.92 1z"></path>
+      </svg>
     </button>
   </nav>
 `;
@@ -148,6 +173,7 @@ const speedValue = document.querySelector<HTMLElement>("#speedValue");
 const speedCard = document.querySelector<HTMLElement>("#speedCard");
 const speedToggle = document.querySelector<HTMLButtonElement>("#speedToggle");
 const weatherView = document.querySelector<HTMLElement>("#weatherView");
+const settingsView = document.querySelector<HTMLElement>("#settingsView");
 const weatherCard = document.querySelector<HTMLElement>("#weatherCard");
 const weatherRefresh = document.querySelector<HTMLButtonElement>("#weatherRefresh");
 const weatherNowTab = document.querySelector<HTMLButtonElement>("#weatherNowTab");
@@ -162,6 +188,8 @@ const weatherWindArrow = document.querySelector<HTMLElement>("#weatherWindArrow"
 const weatherWindDirection = document.querySelector<HTMLElement>("#weatherWindDirection");
 const weatherRain = document.querySelector<HTMLElement>("#weatherRain");
 const weatherUpdatedAt = document.querySelector<HTMLElement>("#weatherUpdatedAt");
+const wakeLockStatus = document.querySelector<HTMLElement>("#wakeLockStatus");
+const wakeLockToggle = document.querySelector<HTMLButtonElement>("#wakeLockToggle");
 const gpsRetryButton = document.querySelector<HTMLButtonElement>("#gpsRetryButton");
 const centerGpsButton = document.querySelector<HTMLButtonElement>("#centerGpsButton");
 const followGpsButton = document.querySelector<HTMLButtonElement>("#followGpsButton");
@@ -169,12 +197,14 @@ const headingButton = document.querySelector<HTMLButtonElement>("#headingButton"
 const statusMessage = document.querySelector<HTMLDivElement>("#statusMessage");
 const mapTab = document.querySelector<HTMLButtonElement>("#mapTab");
 const weatherTab = document.querySelector<HTMLButtonElement>("#weatherTab");
+const settingsTab = document.querySelector<HTMLButtonElement>("#settingsTab");
 
 if (
   !speedValue ||
   !speedCard ||
   !speedToggle ||
   !weatherView ||
+  !settingsView ||
   !weatherCard ||
   !weatherRefresh ||
   !weatherNowTab ||
@@ -189,13 +219,16 @@ if (
   !weatherWindDirection ||
   !weatherRain ||
   !weatherUpdatedAt ||
+  !wakeLockStatus ||
+  !wakeLockToggle ||
   !gpsRetryButton ||
   !centerGpsButton ||
   !followGpsButton ||
   !headingButton ||
   !statusMessage ||
   !mapTab ||
-  !weatherTab
+  !weatherTab ||
+  !settingsTab
 ) {
   throw new Error("Missing required UI elements");
 }
@@ -204,6 +237,7 @@ const speedEl = speedValue;
 const speedCardEl = speedCard;
 const speedToggleEl = speedToggle;
 const weatherViewEl = weatherView;
+const settingsViewEl = settingsView;
 const weatherRefreshEl = weatherRefresh;
 const weatherNowTabEl = weatherNowTab;
 const weatherPlus1hTabEl = weatherPlus1hTab;
@@ -217,6 +251,8 @@ const weatherWindArrowEl = weatherWindArrow;
 const weatherWindDirectionEl = weatherWindDirection;
 const weatherRainEl = weatherRain;
 const weatherUpdatedAtEl = weatherUpdatedAt;
+const wakeLockStatusEl = wakeLockStatus;
+const wakeLockToggleEl = wakeLockToggle;
 const gpsRetryEl = gpsRetryButton;
 const centerGpsEl = centerGpsButton;
 const followGpsEl = followGpsButton;
@@ -224,6 +260,7 @@ const headingEl = headingButton;
 const statusEl = statusMessage;
 const mapTabEl = mapTab;
 const weatherTabEl = weatherTab;
+const settingsTabEl = settingsTab;
 
 const map = new maplibregl.Map({
   container: "map",
@@ -327,6 +364,7 @@ let gpsWatchdogId: number | null = null;
 let isGpsAutoRecoveryBlocked = false;
 let screenWakeLock: ScreenWakeLock | null = null;
 let isRequestingScreenWakeLock = false;
+let isScreenWakeLockEnabled = false;
 
 const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
@@ -576,6 +614,27 @@ function recoverGpsIfStale() {
   startGps();
 }
 
+async function toggleScreenWakeLock() {
+  if (isScreenWakeLockEnabled) {
+    isScreenWakeLockEnabled = false;
+    await releaseScreenWakeLock();
+    renderWakeLockSetting("desactive");
+    return;
+  }
+
+  isScreenWakeLockEnabled = true;
+  renderWakeLockSetting("demande");
+  requestScreenWakeLockIfEnabled();
+}
+
+function requestScreenWakeLockIfEnabled() {
+  if (!isScreenWakeLockEnabled) {
+    return;
+  }
+
+  requestScreenWakeLock();
+}
+
 function requestScreenWakeLock() {
   if (document.visibilityState !== "visible" || screenWakeLock || isRequestingScreenWakeLock) {
     return;
@@ -584,6 +643,7 @@ function requestScreenWakeLock() {
   const wakeLock = (navigator as WakeLockNavigator).wakeLock;
 
   if (!wakeLock) {
+    renderWakeLockSetting("indisponible");
     return;
   }
 
@@ -593,18 +653,22 @@ function requestScreenWakeLock() {
     .request("screen")
     .then((lock) => {
       screenWakeLock = lock;
+      renderWakeLockSetting("actif");
       lock.addEventListener("release", () => {
         if (screenWakeLock === lock) {
           screenWakeLock = null;
         }
 
-        if (document.visibilityState === "visible") {
-          window.setTimeout(requestScreenWakeLock, 1000);
+        renderWakeLockSetting(isScreenWakeLockEnabled ? "demande" : "desactive");
+
+        if (isScreenWakeLockEnabled && document.visibilityState === "visible") {
+          window.setTimeout(requestScreenWakeLockIfEnabled, 1000);
         }
       });
     })
     .catch(() => {
       screenWakeLock = null;
+      renderWakeLockSetting("refuse");
     })
     .finally(() => {
       isRequestingScreenWakeLock = false;
@@ -615,6 +679,33 @@ async function releaseScreenWakeLock() {
   const lock = screenWakeLock;
   screenWakeLock = null;
   await lock?.release();
+}
+
+function renderWakeLockSetting(status: "desactive" | "demande" | "actif" | "refuse" | "indisponible") {
+  wakeLockToggleEl.classList.toggle("is-active", isScreenWakeLockEnabled);
+  wakeLockToggleEl.setAttribute("aria-checked", isScreenWakeLockEnabled ? "true" : "false");
+
+  if (status === "actif") {
+    wakeLockStatusEl.textContent = "Actif tant que l'app reste visible.";
+    return;
+  }
+
+  if (status === "demande") {
+    wakeLockStatusEl.textContent = "Activation en cours...";
+    return;
+  }
+
+  if (status === "refuse") {
+    wakeLockStatusEl.textContent = "Non active par le navigateur.";
+    return;
+  }
+
+  if (status === "indisponible") {
+    wakeLockStatusEl.textContent = "Non disponible sur ce navigateur.";
+    return;
+  }
+
+  wakeLockStatusEl.textContent = "Garde l'ecran allume pendant que l'app est visible.";
 }
 
 speedToggleEl.addEventListener("click", () => {
@@ -636,6 +727,14 @@ mapTabEl.addEventListener("click", () => {
 
 weatherTabEl.addEventListener("click", () => {
   setActiveView("weather");
+});
+
+settingsTabEl.addEventListener("click", () => {
+  setActiveView("settings");
+});
+
+wakeLockToggleEl.addEventListener("click", () => {
+  void toggleScreenWakeLock();
 });
 
 weatherRefreshEl.addEventListener("click", () => {
@@ -668,23 +767,21 @@ window.addEventListener("beforeunload", () => {
 });
 
 window.addEventListener("pageshow", () => {
-  requestScreenWakeLock();
+  requestScreenWakeLockIfEnabled();
   recoverGpsIfStale();
 });
 
 window.addEventListener("focus", () => {
-  requestScreenWakeLock();
+  requestScreenWakeLockIfEnabled();
   recoverGpsIfStale();
 });
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
-    requestScreenWakeLock();
+    requestScreenWakeLockIfEnabled();
     recoverGpsIfStale();
   }
 });
-
-requestScreenWakeLock();
 
 function renderReading(reading: GpsReading) {
   const lngLat: [number, number] = [reading.longitude, reading.latitude];
@@ -1078,22 +1175,36 @@ function setWeatherStatus(message: string) {
   weatherStatusEl.textContent = message;
 }
 
-function setActiveView(view: "map" | "weather") {
+function setActiveView(view: "map" | "weather" | "settings") {
   const isWeatherView = view === "weather";
+  const isSettingsView = view === "settings";
+  const isMapView = view === "map";
 
   weatherViewEl.hidden = !isWeatherView;
-  mapTabEl.classList.toggle("is-active", !isWeatherView);
+  settingsViewEl.hidden = !isSettingsView;
+  mapTabEl.classList.toggle("is-active", isMapView);
   weatherTabEl.classList.toggle("is-active", isWeatherView);
+  settingsTabEl.classList.toggle("is-active", isSettingsView);
+
+  if (isMapView) {
+    mapTabEl.setAttribute("aria-current", "page");
+  } else {
+    mapTabEl.removeAttribute("aria-current");
+  }
 
   if (isWeatherView) {
-    mapTabEl.removeAttribute("aria-current");
     weatherTabEl.setAttribute("aria-current", "page");
   } else {
-    mapTabEl.setAttribute("aria-current", "page");
     weatherTabEl.removeAttribute("aria-current");
   }
 
-  if (!isWeatherView) {
+  if (isSettingsView) {
+    settingsTabEl.setAttribute("aria-current", "page");
+  } else {
+    settingsTabEl.removeAttribute("aria-current");
+  }
+
+  if (isMapView) {
     map.resize();
     collapseMapAttribution();
   }
