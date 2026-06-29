@@ -34,6 +34,10 @@ const HEADING_MARKER_MIN_RENDER_DELTA_DEGREES = 1;
 const HEADING_MARKER_MIN_RENDER_INTERVAL_MS = 120;
 const FOLLOW_CAMERA_DURATION_MS = 250;
 const DEFAULT_FOLLOW_MAX_ZOOM = 15;
+const GPS_START_TIMEOUT_MS = 15000;
+const GPS_STALE_AFTER_MS = 20000;
+const GPS_WATCHDOG_INTERVAL_MS = 10000;
+const GPS_MAX_RECOVERY_ATTEMPTS = 2;
 const IS_MOCK_GPS_MODE = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -261,6 +265,7 @@ if (geolocateControl) {
   });
   geolocateControl.on("trackuserlocationstart", () => {
     isGpsActive = true;
+    scheduleGpsStartTimeout();
     gpsRetryEl.hidden = true;
     setFollowGps(true);
     setStatus(null);
@@ -303,6 +308,12 @@ let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
 let lastRenderedHeadingDegrees: number | null = null;
 let lastHeadingMarkerRenderAt = 0;
+let lastGpsReadingAt = 0;
+let gpsStartAttemptAt = 0;
+let gpsRecoveryAttemptCount = 0;
+let gpsStartTimeoutId: number | null = null;
+let gpsWatchdogId: number | null = null;
+let isGpsAutoRecoveryBlocked = false;
 
 const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
@@ -328,10 +339,13 @@ map.on("load", () => {
     }
   });
 
+  startGpsWatchdog();
   startGps();
 });
 
 gpsRetryEl.addEventListener("click", () => {
+  isGpsAutoRecoveryBlocked = false;
+  gpsRecoveryAttemptCount = 0;
   startGps();
 });
 
@@ -344,7 +358,7 @@ centerGpsEl.addEventListener("click", () => {
   if (lastUsableReading) {
     centerOnGps(lastUsableReading);
   } else if (geolocateControl) {
-    geolocateControl.trigger();
+    triggerGeolocateControl();
   } else {
     setStatus("Position GPS en attente...");
   }
@@ -353,12 +367,11 @@ centerGpsEl.addEventListener("click", () => {
 followGpsEl.addEventListener("click", () => {
   if (geolocateControl) {
     if (!isGpsActive) {
-      isGpsActive = true;
-      gpsRetryEl.hidden = true;
-      setStatus(null);
+      startGps();
+      return;
     }
 
-    geolocateControl.trigger();
+    triggerGeolocateControl();
     return;
   }
 
@@ -427,6 +440,7 @@ if (IS_MOCK_GPS_MODE) {
 
 function startGps() {
   if (isGpsActive) {
+    recoverGpsIfStale();
     return;
   }
 
@@ -437,13 +451,13 @@ function startGps() {
   }
 
   isGpsActive = true;
+  gpsStartAttemptAt = Date.now();
+  scheduleGpsStartTimeout();
   gpsRetryEl.hidden = true;
   setStatus(null);
 
   if (geolocateControl) {
-    if (!geolocateControl.trigger()) {
-      handleGpsError("GPS indisponible.");
-    }
+    triggerGeolocateControl();
     return;
   }
 
@@ -453,6 +467,100 @@ function startGps() {
   }
 
   stopGps = gpsProvider.watch(handleGpsReading, handleGpsError);
+}
+
+function triggerGeolocateControl(): boolean {
+  if (!geolocateControl) {
+    return false;
+  }
+
+  gpsStartAttemptAt = Date.now();
+  scheduleGpsStartTimeout();
+
+  const didTrigger = geolocateControl.trigger();
+
+  if (!didTrigger) {
+    handleGpsError("GPS indisponible.");
+    return false;
+  }
+
+  isGpsActive = true;
+  gpsRetryEl.hidden = true;
+  setStatus(null);
+  return true;
+}
+
+function scheduleGpsStartTimeout() {
+  clearGpsStartTimeout();
+
+  if (IS_MOCK_GPS_MODE) {
+    return;
+  }
+
+  gpsStartTimeoutId = window.setTimeout(() => {
+    recoverGpsIfStale();
+  }, GPS_START_TIMEOUT_MS);
+}
+
+function clearGpsStartTimeout() {
+  if (gpsStartTimeoutId === null) {
+    return;
+  }
+
+  window.clearTimeout(gpsStartTimeoutId);
+  gpsStartTimeoutId = null;
+}
+
+function startGpsWatchdog() {
+  if (IS_MOCK_GPS_MODE || gpsWatchdogId !== null) {
+    return;
+  }
+
+  gpsWatchdogId = window.setInterval(() => {
+    recoverGpsIfStale();
+  }, GPS_WATCHDOG_INTERVAL_MS);
+}
+
+function recoverGpsIfStale() {
+  if (IS_MOCK_GPS_MODE || document.visibilityState === "hidden" || isGpsAutoRecoveryBlocked) {
+    return;
+  }
+
+  if (!isMapReady) {
+    return;
+  }
+
+  if (!isGpsActive) {
+    startGps();
+    return;
+  }
+
+  const now = Date.now();
+  const lastActivityAt = lastGpsReadingAt || gpsStartAttemptAt;
+  const staleAfterMs = lastGpsReadingAt ? GPS_STALE_AFTER_MS : GPS_START_TIMEOUT_MS;
+
+  if (!lastActivityAt || now - lastActivityAt < staleAfterMs) {
+    return;
+  }
+
+  if (gpsRecoveryAttemptCount >= GPS_MAX_RECOVERY_ATTEMPTS) {
+    clearGpsStartTimeout();
+    isGpsAutoRecoveryBlocked = true;
+    handleGpsError("GPS indisponible.");
+    return;
+  }
+
+  gpsRecoveryAttemptCount += 1;
+
+  if (geolocateControl) {
+    triggerGeolocateControl();
+    return;
+  }
+
+  stopGps?.();
+  stopGps = null;
+  isGpsActive = false;
+  startGps();
 }
 
 speedToggleEl.addEventListener("click", () => {
@@ -496,8 +604,26 @@ weatherPlus1hTabEl.addEventListener("click", () => {
 });
 
 window.addEventListener("beforeunload", () => {
+  clearGpsStartTimeout();
+  if (gpsWatchdogId !== null) {
+    window.clearInterval(gpsWatchdogId);
+  }
   stopGps?.();
   stopOrientation?.();
+});
+
+window.addEventListener("pageshow", () => {
+  recoverGpsIfStale();
+});
+
+window.addEventListener("focus", () => {
+  recoverGpsIfStale();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    recoverGpsIfStale();
+  }
 });
 
 function renderReading(reading: GpsReading) {
@@ -637,6 +763,12 @@ function resumeAutomaticMapHeading() {
 }
 
 function handleGpsReading(reading: GpsReading) {
+  lastGpsReadingAt = Date.now();
+  gpsStartAttemptAt = 0;
+  gpsRecoveryAttemptCount = 0;
+  isGpsActive = true;
+  isGpsAutoRecoveryBlocked = false;
+  clearGpsStartTimeout();
   lastReading = reading;
   renderReading(reading);
   weatherRefreshEl.disabled = false;
@@ -649,7 +781,10 @@ function handleGpsReading(reading: GpsReading) {
 }
 
 function handleGpsError(message: string) {
+  clearGpsStartTimeout();
+  gpsStartAttemptAt = 0;
   isGpsActive = false;
+  isGpsAutoRecoveryBlocked = isGpsAutoRecoveryBlocked || message === "Permission GPS refusee.";
   gpsRetryEl.hidden = false;
   weatherRefreshEl.disabled = true;
   setFollowGps(false);
