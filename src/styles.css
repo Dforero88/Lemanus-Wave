@@ -36,7 +36,9 @@ button {
   left: calc(16px + env(safe-area-inset-left));
   z-index: 10;
   display: grid;
+  grid-auto-flow: column;
   gap: 8px;
+  align-items: end;
   justify-items: start;
   width: max-content;
   max-width: calc(100vw - 32px);
@@ -71,6 +73,8 @@ button {
 
 .weather-card,
 .speed-card,
+.shore-distance-card,
+.place-search-card,
 .settings-card {
   border: 1px solid rgba(226, 232, 240, 0.2);
   border-radius: 8px;
@@ -81,23 +85,40 @@ button {
   backdrop-filter: blur(12px);
 }
 
-.speed-card {
+.speed-card,
+.shore-distance-card,
+.place-search-card {
   width: 112px;
   cursor: pointer;
   user-select: none;
 }
 
-.speed-card:focus-visible {
+.shore-distance-card {
+  width: 126px;
+}
+
+.place-search-card {
+  width: 44px;
+  height: 44px;
+}
+
+.speed-card:focus-visible,
+.shore-distance-card:focus-visible,
+.place-search-card:focus-visible {
   outline: 2px solid rgba(186, 230, 253, 0.74);
   outline-offset: 3px;
 }
 
-.speed-header {
+.speed-header,
+.shore-distance-header,
+.place-search-card-header {
   justify-content: flex-start;
   min-height: 32px;
 }
 
-.speed-icon {
+.speed-icon,
+.shore-distance-icon,
+.place-search-icon {
   width: 21px;
   height: 21px;
   fill: none;
@@ -105,6 +126,167 @@ button {
   stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.place-search-card-header {
+  min-height: 44px;
+  padding: 0;
+  justify-content: center;
+}
+
+.place-search-card.is-active {
+  border-color: rgba(186, 230, 253, 0.42);
+  background:
+    linear-gradient(180deg, rgba(14, 165, 233, 0.3), rgba(14, 165, 233, 0.12)),
+    rgba(7, 19, 31, 0.84);
+}
+
+.place-search-panel {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 18;
+  max-width: 520px;
+  margin: 0 auto;
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(7, 19, 31, 0.9)),
+    rgba(7, 19, 31, 0.9);
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.34);
+  backdrop-filter: blur(14px);
+}
+
+.place-search-panel[hidden] {
+  display: none;
+}
+
+.place-search-form {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 8px 6px 12px;
+}
+
+.place-search-form-icon,
+.place-search-submit svg,
+.place-search-close svg {
+  width: 20px;
+  height: 20px;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.place-search-form input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #ffffff;
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.place-search-form input::placeholder {
+  color: rgba(226, 232, 240, 0.58);
+}
+
+.place-search-submit,
+.place-search-close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(226, 232, 240, 0.14);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.66);
+}
+
+.place-search-status {
+  padding: 0 14px 12px;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.place-search-results {
+  display: grid;
+  gap: 5px;
+  padding: 0 8px 8px;
+}
+
+.place-search-result {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.1);
+  border-radius: 7px;
+  color: inherit;
+  background: rgba(15, 23, 42, 0.52);
+  text-align: left;
+}
+
+.place-search-result strong,
+.selected-place-card strong {
+  display: block;
+  color: #ffffff;
+  font-size: 0.9rem;
+  line-height: 1.15;
+}
+
+.place-search-result span,
+.selected-place-card span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(226, 232, 240, 0.66);
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.selected-place-card {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 12;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid rgba(186, 230, 253, 0.2);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(7, 19, 31, 0.88)),
+    rgba(7, 19, 31, 0.88);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.32);
+  backdrop-filter: blur(14px);
+}
+
+.selected-place-card[hidden] {
+  display: none;
+}
+
+.selected-place-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(226, 232, 240, 0.14);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.66);
+}
+
+.selected-place-close svg {
+  width: 18px;
+  height: 18px;
+  color: rgba(226, 232, 240, 0.78);
 }
 
 .weather-screen-card {
@@ -299,7 +481,8 @@ button {
 
 .metric-label,
 .weather-updated,
-.speed-unit {
+.speed-unit,
+.shore-distance-unit {
   color: rgba(226, 232, 240, 0.66);
   font-size: 0.72rem;
   line-height: 1.1;
@@ -438,11 +621,13 @@ button {
   background: #e0f2fe;
 }
 
-.speed-body {
+.speed-body,
+.shore-distance-body {
   padding: 2px 12px 12px;
 }
 
-.speed-card strong {
+.speed-card strong,
+.shore-distance-card strong {
   display: block;
   color: #ffffff;
   font-size: 2rem;
@@ -453,7 +638,8 @@ button {
 }
 
 .weather-card.is-collapsed .weather-body,
-.speed-card.is-collapsed .speed-body {
+.speed-card.is-collapsed .speed-body,
+.shore-distance-card.is-collapsed .shore-distance-body {
   display: none;
 }
 
@@ -462,7 +648,9 @@ button {
 }
 
 .weather-card.is-collapsed,
-.speed-card.is-collapsed {
+.speed-card.is-collapsed,
+.shore-distance-card.is-collapsed,
+.place-search-card.is-collapsed {
   border-color: rgba(226, 232, 240, 0.18);
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(7, 19, 31, 0.76)),
@@ -474,7 +662,9 @@ button {
   width: 128px;
 }
 
-.speed-card.is-collapsed {
+.speed-card.is-collapsed,
+.shore-distance-card.is-collapsed,
+.place-search-card.is-collapsed {
   display: grid;
   place-items: center;
   width: 44px;
@@ -482,12 +672,16 @@ button {
 }
 
 .weather-card.is-collapsed .panel-header,
-.speed-card.is-collapsed .panel-header {
+.speed-card.is-collapsed .panel-header,
+.shore-distance-card.is-collapsed .panel-header,
+.place-search-card.is-collapsed .panel-header {
   min-height: 36px;
   padding: 5px 6px 5px 10px;
 }
 
-.speed-card.is-collapsed .speed-header {
+.speed-card.is-collapsed .speed-header,
+.shore-distance-card.is-collapsed .shore-distance-header,
+.place-search-card.is-collapsed .place-search-card-header {
   min-height: 44px;
   padding: 0;
 }
@@ -498,7 +692,8 @@ button {
 }
 
 .weather-card.is-collapsed .panel-toggle,
-.speed-card.is-collapsed .panel-toggle {
+.speed-card.is-collapsed .panel-toggle,
+.shore-distance-card.is-collapsed .panel-toggle {
   width: 24px;
   height: 24px;
   border-radius: 6px;
@@ -723,8 +918,13 @@ button {
     width: min(286px, calc(100vw - 32px));
   }
 
-  .speed-card {
+  .speed-card,
+  .shore-distance-card {
     width: 112px;
+  }
+
+  .shore-distance-card {
+    width: 126px;
   }
 
   .weather-screen-card {
@@ -735,11 +935,13 @@ button {
     width: 118px;
   }
 
-  .speed-card.is-collapsed {
+  .speed-card.is-collapsed,
+  .shore-distance-card.is-collapsed {
     width: 44px;
   }
 
-  .speed-card strong {
+  .speed-card strong,
+  .shore-distance-card strong {
     font-size: 1.9rem;
   }
 
