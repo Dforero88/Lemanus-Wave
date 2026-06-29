@@ -397,6 +397,13 @@ map.on("load", () => {
 gpsRetryEl.addEventListener("click", () => {
   isGpsAutoRecoveryBlocked = false;
   gpsRecoveryAttemptCount = 0;
+
+  if (geolocateControl) {
+    triggerGeolocateControl();
+    return;
+  }
+
+  isGpsActive = false;
   startGps();
 });
 
@@ -926,6 +933,7 @@ function handleGpsReading(reading: GpsReading) {
   isGpsActive = true;
   isGpsAutoRecoveryBlocked = false;
   clearGpsStartTimeout();
+  gpsRetryEl.hidden = true;
   lastReading = reading;
   renderReading(reading);
   weatherRefreshEl.disabled = false;
