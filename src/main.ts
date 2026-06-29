@@ -40,6 +40,17 @@ const GPS_WATCHDOG_INTERVAL_MS = 10000;
 const GPS_MAX_RECOVERY_ATTEMPTS = 2;
 const IS_MOCK_GPS_MODE = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
+type ScreenWakeLock = {
+  release: () => Promise<void>;
+  addEventListener: (type: "release", listener: () => void) => void;
+};
+
+type WakeLockNavigator = Navigator & {
+  wakeLock?: {
+    request: (type: "screen") => Promise<ScreenWakeLock>;
+  };
+};
+
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (!app) {
@@ -314,6 +325,8 @@ let gpsRecoveryAttemptCount = 0;
 let gpsStartTimeoutId: number | null = null;
 let gpsWatchdogId: number | null = null;
 let isGpsAutoRecoveryBlocked = false;
+let screenWakeLock: ScreenWakeLock | null = null;
+let isRequestingScreenWakeLock = false;
 
 const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
@@ -563,6 +576,47 @@ function recoverGpsIfStale() {
   startGps();
 }
 
+function requestScreenWakeLock() {
+  if (document.visibilityState !== "visible" || screenWakeLock || isRequestingScreenWakeLock) {
+    return;
+  }
+
+  const wakeLock = (navigator as WakeLockNavigator).wakeLock;
+
+  if (!wakeLock) {
+    return;
+  }
+
+  isRequestingScreenWakeLock = true;
+
+  void wakeLock
+    .request("screen")
+    .then((lock) => {
+      screenWakeLock = lock;
+      lock.addEventListener("release", () => {
+        if (screenWakeLock === lock) {
+          screenWakeLock = null;
+        }
+
+        if (document.visibilityState === "visible") {
+          window.setTimeout(requestScreenWakeLock, 1000);
+        }
+      });
+    })
+    .catch(() => {
+      screenWakeLock = null;
+    })
+    .finally(() => {
+      isRequestingScreenWakeLock = false;
+    });
+}
+
+async function releaseScreenWakeLock() {
+  const lock = screenWakeLock;
+  screenWakeLock = null;
+  await lock?.release();
+}
+
 speedToggleEl.addEventListener("click", () => {
   isSpeedPanelOpen = togglePanel(speedCardEl, speedToggleEl, "vitesse");
 
@@ -608,23 +662,29 @@ window.addEventListener("beforeunload", () => {
   if (gpsWatchdogId !== null) {
     window.clearInterval(gpsWatchdogId);
   }
+  void releaseScreenWakeLock();
   stopGps?.();
   stopOrientation?.();
 });
 
 window.addEventListener("pageshow", () => {
+  requestScreenWakeLock();
   recoverGpsIfStale();
 });
 
 window.addEventListener("focus", () => {
+  requestScreenWakeLock();
   recoverGpsIfStale();
 });
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
+    requestScreenWakeLock();
     recoverGpsIfStale();
   }
 });
+
+requestScreenWakeLock();
 
 function renderReading(reading: GpsReading) {
   const lngLat: [number, number] = [reading.longitude, reading.latitude];
