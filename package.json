@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@bybas/weather-icons": "^2.0.0",
+    "lucide": "^1.22.0",
     "maplibre-gl": "^5.9.0"
   },
   "devDependencies": {

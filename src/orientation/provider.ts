@@ -53,7 +53,7 @@ function createDeviceOrientationProvider(): OrientationProvider {
         const permission = await orientationEvent.requestPermission();
 
         if (permission !== "granted") {
-          onError("Permission orientation refusee.");
+          onError("Permission orientation refusée.");
           return () => undefined;
         }
       }

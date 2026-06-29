@@ -82,7 +82,29 @@ button {
 }
 
 .speed-card {
-  width: 128px;
+  width: 112px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.speed-card:focus-visible {
+  outline: 2px solid rgba(186, 230, 253, 0.74);
+  outline-offset: 3px;
+}
+
+.speed-header {
+  justify-content: flex-start;
+  min-height: 32px;
+}
+
+.speed-icon {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: rgba(226, 232, 240, 0.86);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .weather-screen-card {
@@ -328,7 +350,18 @@ button {
 }
 
 .settings-list {
+  display: grid;
+  gap: 10px;
   padding: 14px;
+}
+
+.settings-section-title {
+  margin: 8px 2px 0;
+  color: rgba(226, 232, 240, 0.58);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .setting-row {
@@ -341,6 +374,18 @@ button {
   border: 1px solid rgba(226, 232, 240, 0.12);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.5);
+}
+
+.setting-info-row {
+  justify-content: flex-start;
+}
+
+.setting-line-swatch {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 0;
+  border-top: 3px dashed #f59e0b;
+  border-radius: 999px;
 }
 
 .setting-copy {
@@ -418,7 +463,6 @@ button {
 
 .weather-card.is-collapsed,
 .speed-card.is-collapsed {
-  width: 128px;
   border-color: rgba(226, 232, 240, 0.18);
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(7, 19, 31, 0.76)),
@@ -426,10 +470,26 @@ button {
   box-shadow: 0 10px 30px rgba(2, 6, 23, 0.24);
 }
 
+.weather-card.is-collapsed {
+  width: 128px;
+}
+
+.speed-card.is-collapsed {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+
 .weather-card.is-collapsed .panel-header,
 .speed-card.is-collapsed .panel-header {
   min-height: 36px;
   padding: 5px 6px 5px 10px;
+}
+
+.speed-card.is-collapsed .speed-header {
+  min-height: 44px;
+  padding: 0;
 }
 
 .weather-card.is-collapsed .panel-title,
@@ -553,19 +613,6 @@ button {
   background: #e0f2fe;
 }
 
-.map-legend {
-  width: max-content;
-  max-width: 150px;
-  padding: 8px 10px;
-  border-left: 4px solid #f59e0b;
-  border-radius: 6px;
-  color: rgba(248, 250, 252, 0.9);
-  background: rgba(7, 19, 31, 0.78);
-  font-size: 0.8rem;
-  line-height: 1;
-  backdrop-filter: blur(12px);
-}
-
 .status-message {
   position: fixed;
   right: calc(16px + env(safe-area-inset-right));
@@ -677,16 +724,19 @@ button {
   }
 
   .speed-card {
-    width: 118px;
+    width: 112px;
   }
 
   .weather-screen-card {
     width: 100%;
   }
 
-  .weather-card.is-collapsed,
-  .speed-card.is-collapsed {
+  .weather-card.is-collapsed {
     width: 118px;
+  }
+
+  .speed-card.is-collapsed {
+    width: 44px;
   }
 
   .speed-card strong {
@@ -703,16 +753,4 @@ button {
     bottom: calc(244px + env(safe-area-inset-bottom));
   }
 
-  .map-legend {
-    max-width: 74px;
-    padding: 7px 8px;
-    overflow: hidden;
-    white-space: nowrap;
-    font-size: 0;
-  }
-
-  .map-legend::after {
-    content: "300 m";
-    font-size: 0.74rem;
-  }
 }

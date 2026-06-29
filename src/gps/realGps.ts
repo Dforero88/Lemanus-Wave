@@ -4,7 +4,7 @@ export function createRealGpsProvider(): GpsProvider {
   return {
     watch(onReading, onError) {
       if (!("geolocation" in navigator)) {
-        onError("La geolocalisation n'est pas disponible sur cet appareil.");
+        onError("La géolocalisation n'est pas disponible sur cet appareil.");
         return () => undefined;
       }
 
@@ -23,7 +23,7 @@ export function createRealGpsProvider(): GpsProvider {
         },
         (error) => {
           if (error.code === error.PERMISSION_DENIED) {
-            onError("Permission GPS refusee.");
+            onError("Permission GPS refusée.");
             return;
           }
 

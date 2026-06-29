@@ -1,5 +1,6 @@
 import maplibregl from "maplibre-gl";
 import type { GeoJSONSourceSpecification } from "maplibre-gl";
+import { CloudSun, Gauge, Map, Settings, createIcons } from "lucide";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import { createGpsProvider, type GpsReading } from "./gps/provider";
@@ -58,13 +59,11 @@ if (!app) {
 }
 
 app.innerHTML = `
-  <div id="map" aria-label="Carte du Leman"></div>
+  <div id="map" aria-label="Carte du Léman"></div>
   <div class="panel-stack">
-    <div class="map-legend">Limite indicative 300 m</div>
-    <section id="speedCard" class="speed-card is-collapsed" aria-live="polite">
-      <header class="panel-header">
-        <span class="panel-title">Vitesse</span>
-        <button id="speedToggle" class="panel-toggle" type="button" aria-label="Afficher la vitesse">+</button>
+    <section id="speedCard" class="speed-card is-collapsed" role="button" tabindex="0" aria-label="Afficher la vitesse" aria-live="polite">
+      <header class="panel-header speed-header">
+        <i class="speed-icon" data-lucide="gauge" aria-hidden="true"></i>
       </header>
       <div class="speed-body">
         <strong id="speedValue">--</strong>
@@ -72,18 +71,18 @@ app.innerHTML = `
       </div>
     </section>
   </div>
-  <section id="weatherView" class="weather-view" aria-label="Meteo" hidden>
+  <section id="weatherView" class="weather-view" aria-label="Météo" hidden>
     <div class="weather-screen-shell">
       <section id="weatherCard" class="weather-card weather-screen-card" aria-live="polite">
         <header class="panel-header weather-screen-header">
           <div>
-            <span class="panel-title">Meteo</span>
+            <span class="panel-title">Météo</span>
             <h1 class="weather-screen-title">Conditions</h1>
           </div>
-          <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la meteo" disabled>↻</button>
+          <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la météo" disabled>↻</button>
         </header>
         <div class="weather-body">
-          <div class="weather-tabs" role="group" aria-label="Periode meteo">
+          <div class="weather-tabs" role="group" aria-label="Période météo">
             <button id="weatherNowTab" class="weather-tab is-active" type="button">Maintenant</button>
             <button id="weatherPlus1hTab" class="weather-tab" type="button">+1h</button>
           </div>
@@ -116,20 +115,29 @@ app.innerHTML = `
       </section>
     </div>
   </section>
-  <section id="settingsView" class="settings-view" aria-label="Reglages" hidden>
+  <section id="settingsView" class="settings-view" aria-label="Réglages" hidden>
     <div class="settings-screen-shell">
       <section class="settings-card">
         <header class="settings-header">
-          <span class="panel-title">Reglages</span>
+          <span class="panel-title">Réglages</span>
           <h1 class="settings-title">Navigation</h1>
         </header>
         <div class="settings-list">
+          <div class="settings-section-title">Carte</div>
+          <div class="setting-row setting-info-row">
+            <span class="setting-line-swatch" aria-hidden="true"></span>
+            <div class="setting-copy">
+              <strong>Limite indicative 300 m</strong>
+              <span>Ligne orange traitillée sur la carte. Indication visuelle, pas une référence légale.</span>
+            </div>
+          </div>
+          <div class="settings-section-title">Appareil</div>
           <div class="setting-row">
             <div class="setting-copy">
-              <strong>Ecran actif</strong>
-              <span id="wakeLockStatus">Garde l'ecran allume pendant que l'app est visible.</span>
+              <strong>Écran actif</strong>
+              <span id="wakeLockStatus">Garde l'écran allumé pendant que l'app est visible.</span>
             </div>
-            <button id="wakeLockToggle" class="setting-switch" type="button" role="switch" aria-checked="false" aria-label="Garder l'ecran actif">
+            <button id="wakeLockToggle" class="setting-switch" type="button" role="switch" aria-checked="false" aria-label="Garder l'écran actif">
               <span></span>
             </button>
           </div>
@@ -138,40 +146,36 @@ app.innerHTML = `
     </div>
   </section>
   <button id="gpsRetryButton" class="gps-retry-button" type="button" hidden>Réessayer GPS</button>
-  <div class="gps-controls" aria-label="Controle GPS carte">
+  <div class="gps-controls" aria-label="Contrôle GPS carte">
     <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
     <button id="followGpsButton" class="gps-map-button" type="button" aria-label="Activer le suivi GPS" aria-pressed="false">◎</button>
-    <button id="headingButton" class="gps-map-button" type="button" aria-label="Activer l'orientation telephone" aria-pressed="false">▲</button>
+    <button id="headingButton" class="gps-map-button" type="button" aria-label="Activer l'orientation téléphone" aria-pressed="false">▲</button>
   </div>
   <div id="statusMessage" class="status-message" hidden></div>
   <nav class="bottom-nav" aria-label="Navigation principale">
     <button id="mapTab" class="bottom-nav-button is-active" type="button" aria-label="Afficher la carte" aria-current="page">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"></path>
-        <path d="M9 3v15"></path>
-        <path d="M15 6v15"></path>
-      </svg>
+      <i class="bottom-nav-icon" data-lucide="map" aria-hidden="true"></i>
     </button>
-    <button id="weatherTab" class="bottom-nav-button" type="button" aria-label="Afficher la meteo">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M17.5 18H8a5 5 0 1 1 1.1-9.9A6 6 0 0 1 20 11.5 3.5 3.5 0 0 1 17.5 18z"></path>
-        <path d="M8 21h.01"></path>
-        <path d="M12 21h.01"></path>
-        <path d="M16 21h.01"></path>
-      </svg>
+    <button id="weatherTab" class="bottom-nav-button" type="button" aria-label="Afficher la météo">
+      <i class="bottom-nav-icon" data-lucide="cloud-sun" aria-hidden="true"></i>
     </button>
-    <button id="settingsTab" class="bottom-nav-button" type="button" aria-label="Afficher les reglages">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path>
-        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .92l-.03.08a2 2 0 0 1-3.74 0l-.03-.08a1.7 1.7 0 0 0-1-.92 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.92-1l-.08-.03a2 2 0 0 1 0-3.74l.08-.03a1.7 1.7 0 0 0 .92-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.92l.03-.08a2 2 0 0 1 3.74 0l.03.08a1.7 1.7 0 0 0 1 .92 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.37.15.68.48.92 1l.08.03a2 2 0 0 1 0 3.74l-.08.03a1.7 1.7 0 0 0-.92 1z"></path>
-      </svg>
+    <button id="settingsTab" class="bottom-nav-button" type="button" aria-label="Afficher les réglages">
+      <i class="bottom-nav-icon" data-lucide="settings" aria-hidden="true"></i>
     </button>
   </nav>
 `;
 
+createIcons({
+  icons: {
+    CloudSun,
+    Gauge,
+    Map,
+    Settings
+  }
+});
+
 const speedValue = document.querySelector<HTMLElement>("#speedValue");
 const speedCard = document.querySelector<HTMLElement>("#speedCard");
-const speedToggle = document.querySelector<HTMLButtonElement>("#speedToggle");
 const weatherView = document.querySelector<HTMLElement>("#weatherView");
 const settingsView = document.querySelector<HTMLElement>("#settingsView");
 const weatherCard = document.querySelector<HTMLElement>("#weatherCard");
@@ -202,7 +206,6 @@ const settingsTab = document.querySelector<HTMLButtonElement>("#settingsTab");
 if (
   !speedValue ||
   !speedCard ||
-  !speedToggle ||
   !weatherView ||
   !settingsView ||
   !weatherCard ||
@@ -235,7 +238,6 @@ if (
 
 const speedEl = speedValue;
 const speedCardEl = speedCard;
-const speedToggleEl = speedToggle;
 const weatherViewEl = weatherView;
 const settingsViewEl = settingsView;
 const weatherRefreshEl = weatherRefresh;
@@ -625,7 +627,7 @@ async function toggleScreenWakeLock() {
   if (isScreenWakeLockEnabled) {
     isScreenWakeLockEnabled = false;
     await releaseScreenWakeLock();
-    renderWakeLockSetting("desactive");
+    renderWakeLockSetting("désactivé");
     return;
   }
 
@@ -666,7 +668,7 @@ function requestScreenWakeLock() {
           screenWakeLock = null;
         }
 
-        renderWakeLockSetting(isScreenWakeLockEnabled ? "demande" : "desactive");
+        renderWakeLockSetting(isScreenWakeLockEnabled ? "demande" : "désactivé");
 
         if (isScreenWakeLockEnabled && document.visibilityState === "visible") {
           window.setTimeout(requestScreenWakeLockIfEnabled, 1000);
@@ -675,7 +677,7 @@ function requestScreenWakeLock() {
     })
     .catch(() => {
       screenWakeLock = null;
-      renderWakeLockSetting("refuse");
+      renderWakeLockSetting("refusé");
     })
     .finally(() => {
       isRequestingScreenWakeLock = false;
@@ -688,7 +690,7 @@ async function releaseScreenWakeLock() {
   await lock?.release();
 }
 
-function renderWakeLockSetting(status: "desactive" | "demande" | "actif" | "refuse" | "indisponible") {
+function renderWakeLockSetting(status: "désactivé" | "demande" | "actif" | "refusé" | "indisponible") {
   wakeLockToggleEl.classList.toggle("is-active", isScreenWakeLockEnabled);
   wakeLockToggleEl.setAttribute("aria-checked", isScreenWakeLockEnabled ? "true" : "false");
 
@@ -702,8 +704,8 @@ function renderWakeLockSetting(status: "desactive" | "demande" | "actif" | "refu
     return;
   }
 
-  if (status === "refuse") {
-    wakeLockStatusEl.textContent = "Non active par le navigateur.";
+  if (status === "refusé") {
+    wakeLockStatusEl.textContent = "Non activé par le navigateur.";
     return;
   }
 
@@ -712,20 +714,37 @@ function renderWakeLockSetting(status: "desactive" | "demande" | "actif" | "refu
     return;
   }
 
-  wakeLockStatusEl.textContent = "Garde l'ecran allume pendant que l'app est visible.";
+  wakeLockStatusEl.textContent = "Garde l'écran allumé pendant que l'app est visible.";
 }
 
-speedToggleEl.addEventListener("click", () => {
-  isSpeedPanelOpen = togglePanel(speedCardEl, speedToggleEl, "vitesse");
+function toggleSpeedPanel() {
+  isSpeedPanelOpen = speedCardEl.classList.toggle("is-collapsed") === false;
+  speedCardEl.setAttribute("aria-label", isSpeedPanelOpen ? "Masquer la vitesse" : "Afficher la vitesse");
 
   if (!isSpeedPanelOpen) {
     lastSmoothedSpeedKmh = null;
     pendingStartSpeedKmh = null;
     lastSpeedReading = null;
     speedEl.textContent = "--";
-  } else if (lastReading) {
+    return;
+  }
+
+  if (lastReading) {
     renderSpeed(lastReading);
   }
+}
+
+speedCardEl.addEventListener("click", () => {
+  toggleSpeedPanel();
+});
+
+speedCardEl.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  event.preventDefault();
+  toggleSpeedPanel();
 });
 
 mapTabEl.addEventListener("click", () => {
@@ -865,7 +884,7 @@ function setFollowGps(enabled: boolean) {
   }
   followGpsEl.classList.toggle("is-active", enabled);
   followGpsEl.setAttribute("aria-pressed", enabled ? "true" : "false");
-  followGpsEl.setAttribute("aria-label", enabled ? "Desactiver le suivi GPS" : "Activer le suivi GPS");
+  followGpsEl.setAttribute("aria-label", enabled ? "Désactiver le suivi GPS" : "Activer le suivi GPS");
 }
 
 function preserveCurrentFollowZoom() {
@@ -885,7 +904,7 @@ function setHeadingMapEnabled(enabled: boolean) {
   headingEl.setAttribute("aria-pressed", enabled ? "true" : "false");
   headingEl.setAttribute(
     "aria-label",
-    enabled ? "Desactiver l'orientation de la carte" : "Orienter la carte selon le telephone"
+    enabled ? "Désactiver l'orientation de la carte" : "Orienter la carte selon le téléphone"
   );
 
   if (enabled && lastOrientation) {
@@ -949,7 +968,7 @@ function handleGpsError(message: string) {
   clearGpsStartTimeout();
   gpsStartAttemptAt = 0;
   isGpsActive = false;
-  isGpsAutoRecoveryBlocked = isGpsAutoRecoveryBlocked || message === "Permission GPS refusee.";
+  isGpsAutoRecoveryBlocked = isGpsAutoRecoveryBlocked || message === "Permission GPS refusée.";
   gpsRetryEl.hidden = false;
   weatherRefreshEl.disabled = true;
   setFollowGps(false);
@@ -991,7 +1010,7 @@ function getGpsErrorMessage(event: unknown): string {
   const geolocationError = event as { code?: number };
 
   if (geolocationError.code === 1) {
-    return "Permission GPS refusee.";
+    return "Permission GPS refusée.";
   }
 
   return "GPS indisponible.";
@@ -1122,7 +1141,7 @@ async function updateWeather(reading: GpsReading) {
 
   isWeatherLoading = true;
   weatherRefreshEl.disabled = true;
-  setWeatherStatus("Meteo en cours...");
+  setWeatherStatus("Météo en cours...");
 
   try {
     weatherForecast = await fetchWeatherForPosition(reading);
@@ -1130,7 +1149,7 @@ async function updateWeather(reading: GpsReading) {
     renderWeather();
   } catch {
     weatherForecast = null;
-    setWeatherStatus("Meteo indisponible");
+    setWeatherStatus("Météo indisponible");
   } finally {
     isWeatherLoading = false;
     weatherRefreshEl.disabled = false;
@@ -1166,7 +1185,7 @@ function renderWeather() {
     snapshot.windDirectionDeg === null ? "rotate(0deg)" : `rotate(${snapshot.windDirectionDeg}deg)`;
   weatherRainEl.textContent =
     snapshot.precipitationMm === null ? "--" : `${formatDecimal(snapshot.precipitationMm)} mm`;
-  weatherUpdatedAtEl.textContent = `Maj ${formatTime(weatherForecast.updatedAt)} · ${snapshot.label}`;
+  weatherUpdatedAtEl.textContent = `Màj ${formatTime(weatherForecast.updatedAt)} · ${snapshot.label}`;
 }
 
 function getSelectedWeatherSnapshot(): WeatherSnapshot | null {
@@ -1368,13 +1387,6 @@ function setStatus(message: string | null) {
 
   statusEl.hidden = false;
   statusEl.textContent = message;
-}
-
-function togglePanel(card: HTMLElement, toggle: HTMLButtonElement, label: string): boolean {
-  const isCollapsed = card.classList.toggle("is-collapsed");
-  toggle.textContent = isCollapsed ? "+" : "−";
-  toggle.setAttribute("aria-label", isCollapsed ? `Afficher ${label}` : `Masquer ${label}`);
-  return !isCollapsed;
 }
 
 function formatDecimal(value: number): string {

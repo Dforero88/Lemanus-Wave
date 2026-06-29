@@ -134,7 +134,7 @@ export function describeWeatherCode(code: number | null): string {
   if ([71, 73, 75, 77, 85, 86].includes(code)) return "Neige";
   if ([95, 96, 99].includes(code)) return "Orage";
 
-  return "Meteo";
+  return "Météo";
 }
 
 export function getWeatherIconPath(code: number | null): string {
