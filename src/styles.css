@@ -691,6 +691,14 @@ button {
   background: #e0f2fe;
 }
 
+.settings-version {
+  margin: 8px 2px 0;
+  color: rgba(226, 232, 240, 0.36);
+  font-size: 0.66rem;
+  line-height: 1;
+  text-align: center;
+}
+
 .speed-body,
 .shore-distance-body {
   padding: 2px 12px 12px;

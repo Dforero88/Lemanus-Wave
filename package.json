@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/write-build-info.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/write-build-info.mjs",
     "build": "tsc && vite build",
     "geo:300m": "node scripts/generate-300m-line.mjs",
     "preview": "vite preview"

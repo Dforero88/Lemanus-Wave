@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import { createGpsProvider, type GpsReading } from "./gps/provider";
 import { createOrientationProvider, type OrientationReading } from "./orientation/provider";
+import { BUILD_INFO } from "./build-info";
 import {
   describeWeatherCode,
   fetchWeatherForPosition,
@@ -261,6 +262,9 @@ app.innerHTML = `
             <button id="wakeLockToggle" class="setting-switch" type="button" role="switch" aria-checked="false" aria-label="Garder l'écran actif">
               <span></span>
             </button>
+          </div>
+          <div class="settings-version" aria-label="Version de l'application">
+            Version ${BUILD_INFO.commit} · ${BUILD_INFO.branch}
           </div>
         </div>
       </section>
