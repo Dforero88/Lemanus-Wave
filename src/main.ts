@@ -1,6 +1,6 @@
 import maplibregl from "maplibre-gl";
 import type { GeoJSONSource, GeoJSONSourceSpecification } from "maplibre-gl";
-import { CloudSun, Gauge, Map, Route, Ruler, Search, Settings, X, createIcons } from "lucide";
+import { CloudSun, Gauge, Map, Navigation, Route, Ruler, Search, Settings, X, createIcons } from "lucide";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import { createGpsProvider, type GpsReading } from "./gps/provider";
@@ -47,6 +47,8 @@ const ROUTE_SHORE_LIMIT_METERS = 300;
 const ROUTE_GRID_CELL_METERS = 200;
 const ROUTE_GRID_SPECIAL_LINKS = 16;
 const ROUTE_GRID_SPECIAL_LINK_RADIUS_METERS = 1400;
+const NAVIGATION_ARRIVAL_RADIUS_METERS = 75;
+const NAVIGATION_ROUTE_PROGRESS_MAX_DISTANCE_METERS = 300;
 const IS_MOCK_GPS_MODE = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
 type ScreenWakeLock = {
@@ -115,6 +117,13 @@ type RouteResult = {
   distanceMeters: number;
 };
 
+type RouteProjection = {
+  coordinate: Coordinate;
+  segmentIndex: number;
+  progressMeters: number;
+  distanceFromRouteMeters: number;
+};
+
 type NearestBoundaryPoint = {
   coordinate: Coordinate;
   segmentIndex: number;
@@ -130,6 +139,10 @@ type RouteGridNode = {
 type RouteQueueItem = {
   index: number;
   priority: number;
+};
+
+type GeolocateControlState = maplibregl.GeolocateControl & {
+  _watchState?: "OFF" | "ACTIVE_LOCK" | "WAITING_ACTIVE" | "ACTIVE_ERROR" | "BACKGROUND" | "BACKGROUND_ERROR";
 };
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -186,6 +199,10 @@ app.innerHTML = `
       <button id="selectedPlaceRoute" class="selected-place-route" type="button">
         <i data-lucide="route" aria-hidden="true"></i>
         <span>Itinéraire</span>
+      </button>
+      <button id="selectedPlaceStart" class="selected-place-start" type="button" hidden>
+        <i data-lucide="navigation" aria-hidden="true"></i>
+        <span>Démarrer</span>
       </button>
       <span id="selectedPlaceDistance">--</span>
     </div>
@@ -270,6 +287,30 @@ app.innerHTML = `
       </section>
     </div>
   </section>
+  <section id="navigationCard" class="navigation-card" aria-live="polite" hidden>
+    <span id="navigationStatus" class="navigation-status">Navigation</span>
+    <button id="navigationQuit" class="navigation-quit" type="button" aria-label="Quitter la navigation">
+      <i data-lucide="x" aria-hidden="true"></i>
+    </button>
+    <div class="navigation-metrics">
+      <div>
+        <span>Distance</span>
+        <strong id="navigationDistance">--</strong>
+      </div>
+      <div>
+        <span>Vitesse</span>
+        <strong id="navigationSpeed">--</strong>
+      </div>
+      <div>
+        <span>Temps</span>
+        <strong id="navigationTime">--</strong>
+      </div>
+      <div>
+        <span>ETA</span>
+        <strong id="navigationEta">--</strong>
+      </div>
+    </div>
+  </section>
   <button id="gpsRetryButton" class="gps-retry-button" type="button" hidden>Réessayer GPS</button>
   <div class="gps-controls" aria-label="Contrôle GPS carte">
     <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
@@ -295,6 +336,7 @@ createIcons({
     CloudSun,
     Gauge,
     Map,
+    Navigation,
     Route,
     Ruler,
     Search,
@@ -320,7 +362,15 @@ const selectedPlaceName = document.querySelector<HTMLElement>("#selectedPlaceNam
 const selectedPlaceMeta = document.querySelector<HTMLElement>("#selectedPlaceMeta");
 const selectedPlaceDistance = document.querySelector<HTMLElement>("#selectedPlaceDistance");
 const selectedPlaceRoute = document.querySelector<HTMLButtonElement>("#selectedPlaceRoute");
+const selectedPlaceStart = document.querySelector<HTMLButtonElement>("#selectedPlaceStart");
 const selectedPlaceClose = document.querySelector<HTMLButtonElement>("#selectedPlaceClose");
+const navigationCard = document.querySelector<HTMLElement>("#navigationCard");
+const navigationStatus = document.querySelector<HTMLElement>("#navigationStatus");
+const navigationDistance = document.querySelector<HTMLElement>("#navigationDistance");
+const navigationSpeed = document.querySelector<HTMLElement>("#navigationSpeed");
+const navigationTime = document.querySelector<HTMLElement>("#navigationTime");
+const navigationEta = document.querySelector<HTMLElement>("#navigationEta");
+const navigationQuit = document.querySelector<HTMLButtonElement>("#navigationQuit");
 const weatherView = document.querySelector<HTMLElement>("#weatherView");
 const settingsView = document.querySelector<HTMLElement>("#settingsView");
 const weatherCard = document.querySelector<HTMLElement>("#weatherCard");
@@ -366,7 +416,15 @@ if (
   !selectedPlaceMeta ||
   !selectedPlaceDistance ||
   !selectedPlaceRoute ||
+  !selectedPlaceStart ||
   !selectedPlaceClose ||
+  !navigationCard ||
+  !navigationStatus ||
+  !navigationDistance ||
+  !navigationSpeed ||
+  !navigationTime ||
+  !navigationEta ||
+  !navigationQuit ||
   !weatherView ||
   !settingsView ||
   !weatherCard ||
@@ -414,7 +472,15 @@ const selectedPlaceNameEl = selectedPlaceName;
 const selectedPlaceMetaEl = selectedPlaceMeta;
 const selectedPlaceDistanceEl = selectedPlaceDistance;
 const selectedPlaceRouteEl = selectedPlaceRoute;
+const selectedPlaceStartEl = selectedPlaceStart;
 const selectedPlaceCloseEl = selectedPlaceClose;
+const navigationCardEl = navigationCard;
+const navigationStatusEl = navigationStatus;
+const navigationDistanceEl = navigationDistance;
+const navigationSpeedEl = navigationSpeed;
+const navigationTimeEl = navigationTime;
+const navigationEtaEl = navigationEta;
+const navigationQuitEl = navigationQuit;
 const weatherViewEl = weatherView;
 const settingsViewEl = settingsView;
 const weatherRefreshEl = weatherRefresh;
@@ -558,6 +624,11 @@ let routeGeometryPromise: Promise<RouteGeometry> | null = null;
 let placeSearchResultsState: Place[] = [];
 let selectedPlaceState: Place | null = null;
 let selectedRouteDistanceMeters: number | null = null;
+let activeRouteCoordinates: Coordinate[] | null = null;
+let activeRouteDestination: Coordinate | null = null;
+let activeRouteProgressMeters = 0;
+let isNavigationActive = false;
+let wasSpeedPanelOpenBeforeNavigation = false;
 
 const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
@@ -1060,6 +1131,14 @@ selectedPlaceRouteEl.addEventListener("click", () => {
   void renderRouteToSelectedPlace();
 });
 
+selectedPlaceStartEl.addEventListener("click", () => {
+  startNavigation();
+});
+
+navigationQuitEl.addEventListener("click", () => {
+  quitNavigation();
+});
+
 placeSearchFormEl.addEventListener("submit", (event) => {
   event.preventDefault();
   void searchPlaces();
@@ -1274,6 +1353,7 @@ function handleGpsReading(reading: GpsReading) {
   lastReading = reading;
   renderReading(reading);
   refreshSelectedPlaceDistance();
+  updateNavigation(reading);
   void refreshRouteButtonState();
   weatherRefreshEl.disabled = false;
 
@@ -1452,6 +1532,14 @@ function getShortestAngleDelta(fromDegrees: number, toDegrees: number): number {
 function renderSpeed(reading: GpsReading) {
   const speedKmh = getDisplaySpeedKmh(reading);
   speedEl.textContent = speedKmh === null ? "--" : Math.round(speedKmh).toString();
+}
+
+function setSpeedPanelOpen(open: boolean) {
+  if (isSpeedPanelOpen === open) {
+    return;
+  }
+
+  toggleSpeedPanel();
 }
 
 async function renderShoreDistance() {
@@ -1756,8 +1844,12 @@ async function renderRouteToSelectedPlace() {
     }
 
     setSelectedRoute(route);
+    activeRouteCoordinates = route.coordinates;
+    activeRouteDestination = destination;
+    activeRouteProgressMeters = 0;
     selectedRouteDistanceMeters = route.distanceMeters;
     renderSelectedRouteDistance();
+    selectedPlaceStartEl.hidden = false;
     setStatus(null);
   } catch {
     clearSelectedRoute();
@@ -1799,15 +1891,208 @@ function waitForNextPaint(): Promise<void> {
   });
 }
 
+function startNavigation() {
+  if (!activeRouteCoordinates || !activeRouteDestination || !lastUsableReading) {
+    return;
+  }
+
+  isNavigationActive = true;
+  isCameraLockedForPlaceOrRoute = false;
+  document.body.classList.add("is-navigation-active");
+  wasSpeedPanelOpenBeforeNavigation = isSpeedPanelOpen;
+  selectedPlaceCardEl.hidden = true;
+  navigationCardEl.hidden = false;
+  setSpeedPanelOpen(true);
+  setFollowGps(true);
+  focusGeolocateControlForNavigation();
+
+  if (!stopOrientation) {
+    void startOrientation({ rotateMap: true });
+  } else {
+    setHeadingMapEnabled(true);
+  }
+
+  centerOnGps(lastUsableReading);
+  updateNavigation(lastUsableReading);
+}
+
+function quitNavigation() {
+  stopNavigation({ clearRoute: true });
+}
+
+function stopNavigation(options: { clearRoute: boolean }) {
+  if (!isNavigationActive && !options.clearRoute) {
+    return;
+  }
+
+  isNavigationActive = false;
+  isCameraLockedForPlaceOrRoute = false;
+  document.body.classList.remove("is-navigation-active");
+  navigationCardEl.hidden = true;
+  activeRouteProgressMeters = 0;
+  setFollowGps(false);
+  setHeadingMapEnabled(false);
+
+  if (options.clearRoute && !wasSpeedPanelOpenBeforeNavigation) {
+    setSpeedPanelOpen(false);
+  }
+
+  if (options.clearRoute) {
+    selectedPlaceCardEl.hidden = true;
+    selectedPlaceState = null;
+    activeRouteCoordinates = null;
+    activeRouteDestination = null;
+    selectedRouteDistanceMeters = null;
+    selectedPlaceStartEl.hidden = true;
+    renderSelectedRouteDistance();
+
+    const source = map.getSource("selected-route") as GeoJSONSource | undefined;
+    source?.setData(createRouteGeoJson(null));
+  }
+}
+
+function focusGeolocateControlForNavigation() {
+  if (!geolocateControl) {
+    return;
+  }
+
+  const watchState = (geolocateControl as GeolocateControlState)._watchState;
+
+  if (watchState !== "ACTIVE_LOCK" && watchState !== "WAITING_ACTIVE") {
+    triggerGeolocateControl();
+  }
+}
+
+function updateNavigation(reading: GpsReading) {
+  if (!isNavigationActive || !activeRouteCoordinates || !activeRouteDestination) {
+    return;
+  }
+
+  const position: Coordinate = [reading.longitude, reading.latitude];
+
+  if (coordinateDistanceMeters(position, activeRouteDestination) <= NAVIGATION_ARRIVAL_RADIUS_METERS) {
+    activeRouteProgressMeters = getRouteDistanceMeters(activeRouteCoordinates);
+    setSelectedRouteRemaining([activeRouteDestination]);
+    navigationStatusEl.textContent = "Vous êtes arrivé";
+    navigationDistanceEl.textContent = "0 m";
+    navigationSpeedEl.textContent = formatNavigationSpeed();
+    navigationTimeEl.textContent = "--";
+    navigationEtaEl.textContent = "--";
+    return;
+  }
+
+  const projection = projectPointOnRoute(position, activeRouteCoordinates);
+
+  if (
+    projection.distanceFromRouteMeters <= NAVIGATION_ROUTE_PROGRESS_MAX_DISTANCE_METERS &&
+    projection.progressMeters > activeRouteProgressMeters
+  ) {
+    activeRouteProgressMeters = projection.progressMeters;
+    setSelectedRouteRemaining(createRemainingRouteCoordinates(activeRouteCoordinates, projection));
+  }
+
+  const totalDistanceMeters = getRouteDistanceMeters(activeRouteCoordinates);
+  const remainingMeters = Math.max(0, totalDistanceMeters - activeRouteProgressMeters);
+  navigationStatusEl.textContent = "Navigation";
+  navigationDistanceEl.textContent = formatDistance(remainingMeters);
+  navigationSpeedEl.textContent = formatNavigationSpeed();
+  renderNavigationEta(remainingMeters);
+}
+
+function formatNavigationSpeed(): string {
+  return lastSmoothedSpeedKmh === null ? "--" : `${Math.round(lastSmoothedSpeedKmh)} km/h`;
+}
+
+function renderNavigationEta(remainingMeters: number) {
+  const speedKmh = lastSmoothedSpeedKmh;
+
+  if (speedKmh === null || speedKmh < SPEED_ZERO_THRESHOLD_KMH) {
+    navigationTimeEl.textContent = "--";
+    navigationEtaEl.textContent = "--";
+    return;
+  }
+
+  const remainingHours = remainingMeters / 1000 / speedKmh;
+  const remainingMinutes = Math.max(1, Math.round(remainingHours * 60));
+  const eta = new Date(Date.now() + remainingMinutes * 60 * 1000);
+  navigationTimeEl.textContent = formatDurationMinutes(remainingMinutes);
+  navigationEtaEl.textContent = eta.toLocaleTimeString("fr-CH", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatDurationMinutes(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes === 0 ? `${hours} h` : `${hours} h ${remainingMinutes}`;
+}
+
 function setSelectedRoute(route: RouteResult) {
   const source = map.getSource("selected-route") as GeoJSONSource | undefined;
   source?.setData(createRouteGeoJson(route.coordinates));
   fitMapToRoute(route.coordinates);
 }
 
+function setSelectedRouteRemaining(coordinates: Coordinate[]) {
+  const source = map.getSource("selected-route") as GeoJSONSource | undefined;
+  source?.setData(createRouteGeoJson(coordinates.length >= 2 ? coordinates : null));
+}
+
+function projectPointOnRoute(point: Coordinate, route: Coordinate[]): RouteProjection {
+  let bestProjection: RouteProjection | null = null;
+  let progressBeforeSegmentMeters = 0;
+
+  for (let index = 0; index < route.length - 1; index += 1) {
+    const segmentStart = route[index];
+    const segmentEnd = route[index + 1];
+    const coordinate = getClosestPointOnSegment(point, segmentStart, segmentEnd);
+    const distanceFromRouteMeters = coordinateDistanceMeters(point, coordinate);
+    const progressMeters = progressBeforeSegmentMeters + coordinateDistanceMeters(segmentStart, coordinate);
+
+    if (!bestProjection || distanceFromRouteMeters < bestProjection.distanceFromRouteMeters) {
+      bestProjection = {
+        coordinate,
+        segmentIndex: index,
+        progressMeters,
+        distanceFromRouteMeters
+      };
+    }
+
+    progressBeforeSegmentMeters += coordinateDistanceMeters(segmentStart, segmentEnd);
+  }
+
+  if (!bestProjection) {
+    return {
+      coordinate: route[0],
+      segmentIndex: 0,
+      progressMeters: 0,
+      distanceFromRouteMeters: coordinateDistanceMeters(point, route[0])
+    };
+  }
+
+  return bestProjection;
+}
+
+function createRemainingRouteCoordinates(route: Coordinate[], projection: RouteProjection): Coordinate[] {
+  return dedupeSequentialCoordinates([
+    projection.coordinate,
+    ...route.slice(projection.segmentIndex + 1)
+  ]);
+}
+
 function clearSelectedRoute() {
+  stopNavigation({ clearRoute: false });
+  activeRouteCoordinates = null;
+  activeRouteDestination = null;
+  activeRouteProgressMeters = 0;
   selectedRouteDistanceMeters = null;
   renderSelectedRouteDistance();
+  selectedPlaceStartEl.hidden = true;
   const source = map.getSource("selected-route") as GeoJSONSource | undefined;
   source?.setData(createRouteGeoJson(null));
 }
@@ -2738,6 +3023,10 @@ function setActiveView(view: "map" | "weather" | "settings") {
   mapTabEl.classList.toggle("is-active", isMapView);
   weatherTabEl.classList.toggle("is-active", isWeatherView);
   settingsTabEl.classList.toggle("is-active", isSettingsView);
+
+  if (!isMapView) {
+    setPlaceSearchPanelOpen(false);
+  }
 
   if (isMapView) {
     mapTabEl.setAttribute("aria-current", "page");

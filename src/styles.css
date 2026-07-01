@@ -256,7 +256,7 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  max-width: 360px;
+  max-width: 390px;
   margin: 0 auto;
   padding: 10px;
   border: 1px solid rgba(186, 230, 253, 0.2);
@@ -293,15 +293,44 @@ button {
   font-size: 0.78rem;
   font-weight: 750;
   letter-spacing: 0;
+  vertical-align: top;
 }
 
-.selected-place-route svg {
+.selected-place-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  margin-top: 10px;
+  margin-left: 6px;
+  padding: 0 11px;
+  border: 1px solid rgba(125, 211, 252, 0.38);
+  border-radius: 7px;
+  color: #e0f2fe;
+  background:
+    linear-gradient(180deg, rgba(14, 116, 144, 0.9), rgba(8, 47, 73, 0.88)),
+    #0e7490;
+  box-shadow: 0 10px 24px rgba(8, 47, 73, 0.22);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0;
+  vertical-align: top;
+}
+
+.selected-place-start[hidden] {
+  display: none;
+}
+
+.selected-place-route svg,
+.selected-place-start svg {
   width: 16px;
   height: 16px;
   stroke-width: 2;
 }
 
-.selected-place-route span {
+.selected-place-route span,
+.selected-place-start span {
   display: inline;
   margin-top: 0;
   color: inherit;
@@ -357,6 +386,91 @@ button {
   width: 18px;
   height: 18px;
   color: rgba(226, 232, 240, 0.78);
+}
+
+.navigation-card {
+  position: fixed;
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  z-index: 11;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid rgba(186, 230, 253, 0.18);
+  border-radius: 8px;
+  color: #e2e8f0;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(7, 19, 31, 0.9)),
+    rgba(7, 19, 31, 0.9);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.34);
+  backdrop-filter: blur(14px);
+}
+
+.navigation-card[hidden] {
+  display: none;
+}
+
+.navigation-status {
+  align-self: center;
+}
+
+.navigation-status,
+.navigation-metrics span {
+  display: block;
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.navigation-metrics {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.navigation-metrics div {
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid rgba(226, 232, 240, 0.1);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.navigation-metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: #ffffff;
+  font-size: 0.86rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.navigation-quit {
+  display: grid;
+  place-items: center;
+  align-self: start;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(251, 113, 133, 0.34);
+  border-radius: 7px;
+  color: #fecdd3;
+  background: rgba(127, 29, 29, 0.72);
+}
+
+.navigation-quit svg {
+  width: 17px;
+  height: 17px;
+}
+
+body.is-navigation-active .panel-stack {
+  display: none;
 }
 
 .weather-screen-card {
