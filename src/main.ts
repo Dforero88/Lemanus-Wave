@@ -1,6 +1,22 @@
 import maplibregl from "maplibre-gl";
 import type { GeoJSONSource, GeoJSONSourceSpecification } from "maplibre-gl";
-import { CloudSun, Gauge, Map, Navigation, Route, Ruler, Search, Settings, X, createIcons } from "lucide";
+import {
+  CloudSun,
+  Compass,
+  Gauge,
+  Locate,
+  LocateFixed,
+  Map,
+  Navigation,
+  Route,
+  Ruler,
+  Search,
+  Settings,
+  X,
+  ZoomIn,
+  ZoomOut,
+  createIcons
+} from "lucide";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import { createGpsProvider, type GpsReading } from "./gps/provider";
@@ -12,7 +28,6 @@ import {
   formatWindDirection,
   getWeatherIconPath,
   type WeatherForecast,
-  type WeatherPeriod,
   type WeatherSnapshot
 } from "./weather/openMeteo";
 
@@ -221,33 +236,52 @@ app.innerHTML = `
           <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la météo" disabled>↻</button>
         </header>
         <div class="weather-body">
-          <div class="weather-tabs" role="group" aria-label="Période météo">
-            <button id="weatherNowTab" class="weather-tab is-active" type="button">Maintenant</button>
-            <button id="weatherPlus1hTab" class="weather-tab" type="button">+1h</button>
-          </div>
           <div id="weatherStatus" class="weather-status">GPS requis</div>
           <div id="weatherMetrics" class="weather-metrics" hidden>
-            <div class="weather-primary">
-              <span class="weather-icon-frame" aria-hidden="true">
-                <img id="weatherIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
-              </span>
-              <div class="weather-main">
-                <strong id="weatherTemp">--</strong>
-                <span id="weatherCondition">--</span>
+            <article class="weather-period weather-period-now">
+              <span class="weather-period-label">Maintenant</span>
+              <div class="weather-period-row">
+                <div class="weather-primary">
+                  <span class="weather-icon-frame" aria-hidden="true">
+                    <img id="weatherNowIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
+                  </span>
+                  <div class="weather-main">
+                    <strong id="weatherNowTemp">--</strong>
+                    <span id="weatherNowCondition">--</span>
+                  </div>
+                </div>
+                <div class="metric-group">
+                  <span class="metric-label">Vent</span>
+                  <div class="wind-row">
+                    <strong id="weatherNowWind">--</strong>
+                    <span id="weatherNowWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
+                  </div>
+                  <span id="weatherNowWindDirection">--</span>
+                </div>
               </div>
-            </div>
-            <div class="metric-group">
-              <span class="metric-label">Vent</span>
-              <div class="wind-row">
-                <strong id="weatherWind">--</strong>
-                <span id="weatherWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
+            </article>
+            <article class="weather-period weather-period-forecast">
+              <span class="weather-period-label">Dans 1h</span>
+              <div class="weather-period-row">
+                <div class="weather-primary">
+                  <span class="weather-icon-frame" aria-hidden="true">
+                    <img id="weatherPlus1hIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
+                  </span>
+                  <div class="weather-main">
+                    <strong id="weatherPlus1hTemp">--</strong>
+                    <span id="weatherPlus1hCondition">--</span>
+                  </div>
+                </div>
+                <div class="metric-group">
+                  <span class="metric-label">Vent</span>
+                  <div class="wind-row">
+                    <strong id="weatherPlus1hWind">--</strong>
+                    <span id="weatherPlus1hWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
+                  </div>
+                  <span id="weatherPlus1hWindDirection">--</span>
+                </div>
               </div>
-              <span id="weatherWindDirection">--</span>
-            </div>
-            <div class="metric-group">
-              <span class="metric-label">Pluie</span>
-              <strong id="weatherRain">--</strong>
-            </div>
+            </article>
             <span id="weatherUpdatedAt" class="weather-updated">--</span>
           </div>
         </div>
@@ -313,9 +347,25 @@ app.innerHTML = `
   </section>
   <button id="gpsRetryButton" class="gps-retry-button" type="button" hidden>Réessayer GPS</button>
   <div class="gps-controls" aria-label="Contrôle GPS carte">
-    <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">⌖</button>
-    <button id="followGpsButton" class="gps-map-button" type="button" aria-label="Activer le suivi GPS" aria-pressed="false">◎</button>
-    <button id="headingButton" class="gps-map-button" type="button" aria-label="Activer l'orientation téléphone" aria-pressed="false">▲</button>
+    <div class="map-zoom-controls" aria-label="Zoom carte">
+      <button id="zoomInButton" class="gps-map-button" type="button" aria-label="Zoomer">
+        <i data-lucide="zoom-in" aria-hidden="true"></i>
+      </button>
+      <button id="zoomOutButton" class="gps-map-button" type="button" aria-label="Dézoomer">
+        <i data-lucide="zoom-out" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="gps-position-controls" aria-label="Position GPS carte">
+      <button id="centerGpsButton" class="gps-map-button" type="button" aria-label="Centrer sur la position GPS">
+        <i data-lucide="locate-fixed" aria-hidden="true"></i>
+      </button>
+      <button id="followGpsButton" class="gps-map-button" type="button" aria-label="Activer le suivi GPS" aria-pressed="false">
+        <i data-lucide="locate" aria-hidden="true"></i>
+      </button>
+      <button id="headingButton" class="gps-map-button" type="button" aria-label="Activer l'orientation téléphone" aria-pressed="false">
+        <i data-lucide="compass" aria-hidden="true"></i>
+      </button>
+    </div>
   </div>
   <div id="statusMessage" class="status-message" hidden></div>
   <nav class="bottom-nav" aria-label="Navigation principale">
@@ -334,14 +384,19 @@ app.innerHTML = `
 createIcons({
   icons: {
     CloudSun,
+    Compass,
     Gauge,
+    Locate,
+    LocateFixed,
     Map,
     Navigation,
     Route,
     Ruler,
     Search,
     Settings,
-    X
+    X,
+    ZoomIn,
+    ZoomOut
   }
 });
 
@@ -375,21 +430,26 @@ const weatherView = document.querySelector<HTMLElement>("#weatherView");
 const settingsView = document.querySelector<HTMLElement>("#settingsView");
 const weatherCard = document.querySelector<HTMLElement>("#weatherCard");
 const weatherRefresh = document.querySelector<HTMLButtonElement>("#weatherRefresh");
-const weatherNowTab = document.querySelector<HTMLButtonElement>("#weatherNowTab");
-const weatherPlus1hTab = document.querySelector<HTMLButtonElement>("#weatherPlus1hTab");
 const weatherStatus = document.querySelector<HTMLElement>("#weatherStatus");
 const weatherMetrics = document.querySelector<HTMLElement>("#weatherMetrics");
-const weatherIcon = document.querySelector<HTMLImageElement>("#weatherIcon");
-const weatherTemp = document.querySelector<HTMLElement>("#weatherTemp");
-const weatherCondition = document.querySelector<HTMLElement>("#weatherCondition");
-const weatherWind = document.querySelector<HTMLElement>("#weatherWind");
-const weatherWindArrow = document.querySelector<HTMLElement>("#weatherWindArrow");
-const weatherWindDirection = document.querySelector<HTMLElement>("#weatherWindDirection");
-const weatherRain = document.querySelector<HTMLElement>("#weatherRain");
+const weatherNowIcon = document.querySelector<HTMLImageElement>("#weatherNowIcon");
+const weatherNowTemp = document.querySelector<HTMLElement>("#weatherNowTemp");
+const weatherNowCondition = document.querySelector<HTMLElement>("#weatherNowCondition");
+const weatherNowWind = document.querySelector<HTMLElement>("#weatherNowWind");
+const weatherNowWindArrow = document.querySelector<HTMLElement>("#weatherNowWindArrow");
+const weatherNowWindDirection = document.querySelector<HTMLElement>("#weatherNowWindDirection");
+const weatherPlus1hIcon = document.querySelector<HTMLImageElement>("#weatherPlus1hIcon");
+const weatherPlus1hTemp = document.querySelector<HTMLElement>("#weatherPlus1hTemp");
+const weatherPlus1hCondition = document.querySelector<HTMLElement>("#weatherPlus1hCondition");
+const weatherPlus1hWind = document.querySelector<HTMLElement>("#weatherPlus1hWind");
+const weatherPlus1hWindArrow = document.querySelector<HTMLElement>("#weatherPlus1hWindArrow");
+const weatherPlus1hWindDirection = document.querySelector<HTMLElement>("#weatherPlus1hWindDirection");
 const weatherUpdatedAt = document.querySelector<HTMLElement>("#weatherUpdatedAt");
 const wakeLockStatus = document.querySelector<HTMLElement>("#wakeLockStatus");
 const wakeLockToggle = document.querySelector<HTMLButtonElement>("#wakeLockToggle");
 const gpsRetryButton = document.querySelector<HTMLButtonElement>("#gpsRetryButton");
+const zoomInButton = document.querySelector<HTMLButtonElement>("#zoomInButton");
+const zoomOutButton = document.querySelector<HTMLButtonElement>("#zoomOutButton");
 const centerGpsButton = document.querySelector<HTMLButtonElement>("#centerGpsButton");
 const followGpsButton = document.querySelector<HTMLButtonElement>("#followGpsButton");
 const headingButton = document.querySelector<HTMLButtonElement>("#headingButton");
@@ -429,21 +489,26 @@ if (
   !settingsView ||
   !weatherCard ||
   !weatherRefresh ||
-  !weatherNowTab ||
-  !weatherPlus1hTab ||
   !weatherStatus ||
   !weatherMetrics ||
-  !weatherIcon ||
-  !weatherTemp ||
-  !weatherCondition ||
-  !weatherWind ||
-  !weatherWindArrow ||
-  !weatherWindDirection ||
-  !weatherRain ||
+  !weatherNowIcon ||
+  !weatherNowTemp ||
+  !weatherNowCondition ||
+  !weatherNowWind ||
+  !weatherNowWindArrow ||
+  !weatherNowWindDirection ||
+  !weatherPlus1hIcon ||
+  !weatherPlus1hTemp ||
+  !weatherPlus1hCondition ||
+  !weatherPlus1hWind ||
+  !weatherPlus1hWindArrow ||
+  !weatherPlus1hWindDirection ||
   !weatherUpdatedAt ||
   !wakeLockStatus ||
   !wakeLockToggle ||
   !gpsRetryButton ||
+  !zoomInButton ||
+  !zoomOutButton ||
   !centerGpsButton ||
   !followGpsButton ||
   !headingButton ||
@@ -484,21 +549,26 @@ const navigationQuitEl = navigationQuit;
 const weatherViewEl = weatherView;
 const settingsViewEl = settingsView;
 const weatherRefreshEl = weatherRefresh;
-const weatherNowTabEl = weatherNowTab;
-const weatherPlus1hTabEl = weatherPlus1hTab;
 const weatherStatusEl = weatherStatus;
 const weatherMetricsEl = weatherMetrics;
-const weatherIconEl = weatherIcon;
-const weatherTempEl = weatherTemp;
-const weatherConditionEl = weatherCondition;
-const weatherWindEl = weatherWind;
-const weatherWindArrowEl = weatherWindArrow;
-const weatherWindDirectionEl = weatherWindDirection;
-const weatherRainEl = weatherRain;
+const weatherNowIconEl = weatherNowIcon;
+const weatherNowTempEl = weatherNowTemp;
+const weatherNowConditionEl = weatherNowCondition;
+const weatherNowWindEl = weatherNowWind;
+const weatherNowWindArrowEl = weatherNowWindArrow;
+const weatherNowWindDirectionEl = weatherNowWindDirection;
+const weatherPlus1hIconEl = weatherPlus1hIcon;
+const weatherPlus1hTempEl = weatherPlus1hTemp;
+const weatherPlus1hConditionEl = weatherPlus1hCondition;
+const weatherPlus1hWindEl = weatherPlus1hWind;
+const weatherPlus1hWindArrowEl = weatherPlus1hWindArrow;
+const weatherPlus1hWindDirectionEl = weatherPlus1hWindDirection;
 const weatherUpdatedAtEl = weatherUpdatedAt;
 const wakeLockStatusEl = wakeLockStatus;
 const wakeLockToggleEl = wakeLockToggle;
 const gpsRetryEl = gpsRetryButton;
+const zoomInEl = zoomInButton;
+const zoomOutEl = zoomOutButton;
 const centerGpsEl = centerGpsButton;
 const followGpsEl = followGpsButton;
 const headingEl = headingButton;
@@ -522,14 +592,6 @@ map.addControl(
   "bottom-right"
 );
 collapseMapAttribution();
-
-map.addControl(
-  new maplibregl.NavigationControl({
-    showCompass: false,
-    visualizePitch: false
-  }),
-  "bottom-right"
-);
 
 const geolocateControl = IS_MOCK_GPS_MODE
   ? null
@@ -590,7 +652,6 @@ let pendingStartSpeedKmh: number | null = null;
 let stopGps: (() => void) | null = null;
 let stopOrientation: (() => void) | null = null;
 let weatherForecast: WeatherForecast | null = null;
-let selectedWeatherPeriod: WeatherPeriod = "now";
 let hasLoadedInitialWeather = false;
 let isWeatherLoading = false;
 let isSpeedPanelOpen = false;
@@ -698,6 +759,14 @@ gpsRetryEl.addEventListener("click", () => {
 
   isGpsActive = false;
   startGps();
+});
+
+zoomInEl.addEventListener("click", () => {
+  map.zoomIn({ duration: 240 });
+});
+
+zoomOutEl.addEventListener("click", () => {
+  map.zoomOut({ duration: 240 });
 });
 
 centerGpsEl.addEventListener("click", () => {
@@ -1169,16 +1238,6 @@ weatherRefreshEl.addEventListener("click", () => {
   void updateWeather(lastReading);
 });
 
-weatherNowTabEl.addEventListener("click", () => {
-  selectedWeatherPeriod = "now";
-  renderWeather();
-});
-
-weatherPlus1hTabEl.addEventListener("click", () => {
-  selectedWeatherPeriod = "plus1h";
-  renderWeather();
-});
-
 window.addEventListener("beforeunload", () => {
   clearGpsStartTimeout();
   if (gpsWatchdogId !== null) {
@@ -1309,6 +1368,7 @@ function setHeadingMapEnabled(enabled: boolean) {
   } else if (!enabled) {
     lastAppliedMapHeadingDegrees = null;
     lastHeadingMapRotationAt = 0;
+    map.easeTo({ bearing: 0, duration: 260 }, { geolocateSource: true });
   }
 }
 
@@ -1762,12 +1822,13 @@ function unlockCameraForGpsAction() {
 }
 
 function renderSelectedPlace(place: Place) {
+  clearSelectedRoute();
   selectedPlaceState = {
     ...place,
     distanceFromUserMeters: getDistanceFromUserMeters(place.coordinates)
   };
-  selectedRouteDistanceMeters = null;
   selectedPlaceCardEl.hidden = false;
+  selectedPlaceRouteEl.hidden = false;
   selectedPlaceNameEl.textContent = selectedPlaceState.name;
   selectedPlaceMetaEl.textContent = formatPlaceResultMeta(selectedPlaceState);
   renderSelectedRouteDistance();
@@ -1849,6 +1910,7 @@ async function renderRouteToSelectedPlace() {
     activeRouteProgressMeters = 0;
     selectedRouteDistanceMeters = route.distanceMeters;
     renderSelectedRouteDistance();
+    selectedPlaceRouteEl.hidden = true;
     selectedPlaceStartEl.hidden = false;
     setStatus(null);
   } catch {
@@ -1943,6 +2005,7 @@ function stopNavigation(options: { clearRoute: boolean }) {
     activeRouteCoordinates = null;
     activeRouteDestination = null;
     selectedRouteDistanceMeters = null;
+    selectedPlaceRouteEl.hidden = false;
     selectedPlaceStartEl.hidden = true;
     renderSelectedRouteDistance();
 
@@ -2092,6 +2155,7 @@ function clearSelectedRoute() {
   activeRouteProgressMeters = 0;
   selectedRouteDistanceMeters = null;
   renderSelectedRouteDistance();
+  selectedPlaceRouteEl.hidden = false;
   selectedPlaceStartEl.hidden = true;
   const source = map.getSource("selected-route") as GeoJSONSource | undefined;
   source?.setData(createRouteGeoJson(null));
@@ -2973,38 +3037,53 @@ function renderWeather() {
     return;
   }
 
-  const snapshot = getSelectedWeatherSnapshot();
-
-  if (!snapshot) {
+  if (!weatherForecast.plus1h) {
     setWeatherStatus("+1h indisponible");
     return;
   }
 
-  weatherNowTabEl.classList.toggle("is-active", selectedWeatherPeriod === "now");
-  weatherPlus1hTabEl.classList.toggle("is-active", selectedWeatherPeriod === "plus1h");
   weatherStatusEl.hidden = true;
   weatherMetricsEl.hidden = false;
 
-  weatherTempEl.textContent =
-    snapshot.temperatureC === null ? "--" : `${Math.round(snapshot.temperatureC)}°`;
-  weatherIconEl.src = getWeatherIconPath(snapshot.weatherCode);
-  weatherConditionEl.textContent = describeWeatherCode(snapshot.weatherCode);
-  weatherWindEl.textContent =
-    snapshot.windSpeedKmh === null ? "--" : `${Math.round(snapshot.windSpeedKmh)} km/h`;
-  weatherWindDirectionEl.textContent = formatWindDirection(snapshot.windDirectionDeg);
-  weatherWindArrowEl.style.transform =
-    snapshot.windDirectionDeg === null ? "rotate(0deg)" : `rotate(${snapshot.windDirectionDeg}deg)`;
-  weatherRainEl.textContent =
-    snapshot.precipitationMm === null ? "--" : `${formatDecimal(snapshot.precipitationMm)} mm`;
-  weatherUpdatedAtEl.textContent = `Màj ${formatTime(weatherForecast.updatedAt)} · ${snapshot.label}`;
+  renderWeatherSnapshot(weatherForecast.now, {
+    icon: weatherNowIconEl,
+    temp: weatherNowTempEl,
+    condition: weatherNowConditionEl,
+    wind: weatherNowWindEl,
+    windArrow: weatherNowWindArrowEl,
+    windDirection: weatherNowWindDirectionEl
+  });
+  renderWeatherSnapshot(weatherForecast.plus1h, {
+    icon: weatherPlus1hIconEl,
+    temp: weatherPlus1hTempEl,
+    condition: weatherPlus1hConditionEl,
+    wind: weatherPlus1hWindEl,
+    windArrow: weatherPlus1hWindArrowEl,
+    windDirection: weatherPlus1hWindDirectionEl
+  });
+  weatherUpdatedAtEl.textContent = `Màj ${formatTime(weatherForecast.updatedAt)}`;
 }
 
-function getSelectedWeatherSnapshot(): WeatherSnapshot | null {
-  if (!weatherForecast) {
-    return null;
+function renderWeatherSnapshot(
+  snapshot: WeatherSnapshot,
+  elements: {
+    icon: HTMLImageElement;
+    temp: HTMLElement;
+    condition: HTMLElement;
+    wind: HTMLElement;
+    windArrow: HTMLElement;
+    windDirection: HTMLElement;
   }
-
-  return selectedWeatherPeriod === "now" ? weatherForecast.now : weatherForecast.plus1h;
+) {
+  elements.temp.textContent =
+    snapshot.temperatureC === null ? "--" : `${Math.round(snapshot.temperatureC)}°`;
+  elements.icon.src = getWeatherIconPath(snapshot.weatherCode);
+  elements.condition.textContent = describeWeatherCode(snapshot.weatherCode);
+  elements.wind.textContent =
+    snapshot.windSpeedKmh === null ? "--" : `${Math.round(snapshot.windSpeedKmh)} km/h`;
+  elements.windDirection.textContent = formatWindDirection(snapshot.windDirectionDeg);
+  elements.windArrow.style.transform =
+    snapshot.windDirectionDeg === null ? "rotate(0deg)" : `rotate(${snapshot.windDirectionDeg}deg)`;
 }
 
 function setWeatherStatus(message: string) {

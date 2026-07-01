@@ -303,7 +303,6 @@ button {
   gap: 6px;
   min-height: 32px;
   margin-top: 10px;
-  margin-left: 6px;
   padding: 0 11px;
   border: 1px solid rgba(125, 211, 252, 0.38);
   border-radius: 7px;
@@ -319,6 +318,10 @@ button {
 }
 
 .selected-place-start[hidden] {
+  display: none;
+}
+
+.selected-place-route[hidden] {
   display: none;
 }
 
@@ -539,35 +542,6 @@ body.is-navigation-active .panel-stack {
   padding: 14px;
 }
 
-.weather-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-bottom: 10px;
-  padding: 3px;
-  border-radius: 7px;
-  background: rgba(15, 23, 42, 0.72);
-}
-
-.weather-screen-card .weather-tabs {
-  margin-bottom: 16px;
-  background: rgba(2, 6, 23, 0.34);
-}
-
-.weather-tab {
-  min-height: 28px;
-  border: 0;
-  border-radius: 5px;
-  color: rgba(226, 232, 240, 0.76);
-  background: transparent;
-  font-size: 0.76rem;
-}
-
-.weather-tab.is-active {
-  color: #07131f;
-  background: #e0f2fe;
-}
-
 .weather-status {
   padding: 16px 4px 18px;
   color: rgba(226, 232, 240, 0.72);
@@ -575,22 +549,54 @@ body.is-navigation-active .panel-stack {
 }
 
 .weather-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.weather-period {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 7px;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.12), transparent 42%),
+    rgba(15, 23, 42, 0.44);
+}
+
+.weather-period-forecast {
+  background:
+    linear-gradient(135deg, rgba(159, 18, 57, 0.12), transparent 42%),
+    rgba(15, 23, 42, 0.4);
+}
+
+.weather-period-label {
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.weather-period-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .weather-primary {
-  grid-column: span 2;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  padding: 4px 2px 8px;
+  min-width: 0;
+  padding: 4px 2px;
 }
 
 .weather-screen-card .weather-primary {
-  padding: 6px 2px 14px;
+  padding: 2px 0;
 }
 
 .weather-icon-frame {
@@ -608,9 +614,9 @@ body.is-navigation-active .panel-stack {
 }
 
 .weather-screen-card .weather-icon-frame {
-  width: 72px;
-  height: 72px;
-  flex-basis: 72px;
+  width: 58px;
+  height: 58px;
+  flex-basis: 58px;
 }
 
 .weather-icon {
@@ -622,8 +628,8 @@ body.is-navigation-active .panel-stack {
 }
 
 .weather-screen-card .weather-icon {
-  width: 66px;
-  height: 66px;
+  width: 52px;
+  height: 52px;
 }
 
 .weather-main {
@@ -639,7 +645,7 @@ body.is-navigation-active .panel-stack {
 }
 
 .weather-screen-card .weather-main strong {
-  font-size: 2.75rem;
+  font-size: 2.1rem;
 }
 
 .weather-main span {
@@ -658,9 +664,16 @@ body.is-navigation-active .panel-stack {
 }
 
 .weather-screen-card .metric-group {
-  min-height: 76px;
-  padding: 10px;
+  min-height: 0;
+  padding: 9px 10px;
   background: rgba(15, 23, 42, 0.5);
+}
+
+.weather-period .metric-group {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
 }
 
 .metric-label,
@@ -674,7 +687,7 @@ body.is-navigation-active .panel-stack {
 
 .metric-group strong {
   display: block;
-  margin: 5px 0 2px;
+  margin: 0;
   color: #ffffff;
   font-size: 0.95rem;
   line-height: 1.1;
@@ -690,8 +703,8 @@ body.is-navigation-active .panel-stack {
 .wind-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .wind-arrow {
@@ -913,8 +926,15 @@ body.is-navigation-active .panel-stack {
 .gps-controls {
   position: fixed;
   right: calc(16px + env(safe-area-inset-right));
-  bottom: calc(242px + env(safe-area-inset-bottom));
+  bottom: calc(96px + env(safe-area-inset-bottom));
   z-index: 10;
+  display: grid;
+  gap: 8px;
+}
+
+.map-zoom-controls,
+.gps-position-controls {
+  display: block;
   overflow: hidden;
   border-radius: 4px;
   background: #ffffff;
@@ -975,16 +995,23 @@ body.is-navigation-active .panel-stack {
 }
 
 .gps-map-button {
-  display: block;
-  width: 29px;
-  height: 29px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
   border: 0;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #dddddd;
   border-radius: 0;
   color: #333333;
   background: #ffffff;
-  font-size: 1rem;
+  font-size: 1.08rem;
   line-height: 1;
+}
+
+.gps-map-button svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.1;
 }
 
 .gps-map-button:last-child {
@@ -1098,10 +1125,6 @@ body.is-navigation-active .panel-stack {
     width: max-content;
   }
 
-  .weather-metrics {
-    gap: 6px;
-  }
-
   .metric-group {
     padding: 7px;
   }
@@ -1144,7 +1167,11 @@ body.is-navigation-active .panel-stack {
   }
 
   .gps-controls {
-    bottom: calc(244px + env(safe-area-inset-bottom));
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  body.is-navigation-active .gps-controls {
+    bottom: calc(216px + env(safe-area-inset-bottom));
   }
 
 }

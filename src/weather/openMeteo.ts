@@ -8,7 +8,6 @@ export type WeatherSnapshot = {
   time: string;
   temperatureC: number | null;
   weatherCode: number | null;
-  precipitationMm: number | null;
   windSpeedKmh: number | null;
   windDirectionDeg: number | null;
 };
@@ -24,7 +23,6 @@ type OpenMeteoResponse = {
     time?: string;
     temperature_2m?: number;
     weather_code?: number;
-    precipitation?: number;
     wind_speed_10m?: number;
     wind_direction_10m?: number;
   };
@@ -32,7 +30,6 @@ type OpenMeteoResponse = {
     time?: string[];
     temperature_2m?: number[];
     weather_code?: number[];
-    precipitation?: number[];
     wind_speed_10m?: number[];
     wind_direction_10m?: number[];
   };
@@ -41,7 +38,6 @@ type OpenMeteoResponse = {
 const CURRENT_FIELDS = [
   "temperature_2m",
   "weather_code",
-  "precipitation",
   "wind_speed_10m",
   "wind_direction_10m"
 ].join(",");
@@ -54,8 +50,7 @@ export async function fetchWeatherForPosition(reading: GpsReading): Promise<Weat
     hourly: CURRENT_FIELDS,
     forecast_hours: "3",
     timezone: "auto",
-    wind_speed_unit: "kmh",
-    precipitation_unit: "mm"
+    wind_speed_unit: "kmh"
   });
 
   const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
@@ -83,7 +78,6 @@ function createCurrentSnapshot(data: OpenMeteoResponse): WeatherSnapshot {
     time: current.time ?? new Date().toISOString(),
     temperatureC: numberOrNull(current.temperature_2m),
     weatherCode: numberOrNull(current.weather_code),
-    precipitationMm: numberOrNull(current.precipitation),
     windSpeedKmh: numberOrNull(current.wind_speed_10m),
     windDirectionDeg: numberOrNull(current.wind_direction_10m)
   };
@@ -110,7 +104,6 @@ function createPlus1hSnapshot(data: OpenMeteoResponse, currentTime: string): Wea
     time: hourly.time[index],
     temperatureC: numberOrNull(hourly.temperature_2m?.[index]),
     weatherCode: numberOrNull(hourly.weather_code?.[index]),
-    precipitationMm: numberOrNull(hourly.precipitation?.[index]),
     windSpeedKmh: numberOrNull(hourly.wind_speed_10m?.[index]),
     windDirectionDeg: numberOrNull(hourly.wind_direction_10m?.[index])
   };
