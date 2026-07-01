@@ -490,11 +490,15 @@ if (geolocateControl) {
     isGpsActive = true;
     scheduleGpsStartTimeout();
     gpsRetryEl.hidden = true;
-    setFollowGps(true);
+    if (!isCameraLockedForPlaceOrRoute) {
+      setFollowGps(true);
+    }
     setStatus(null);
   });
   geolocateControl.on("userlocationfocus", () => {
-    setFollowGps(true);
+    if (!isCameraLockedForPlaceOrRoute) {
+      setFollowGps(true);
+    }
   });
   geolocateControl.on("trackuserlocationend", () => {
     setFollowGps(false);
@@ -529,6 +533,7 @@ let isFollowGpsEnabled = false;
 let isHeadingMapEnabled = false;
 let isUserInteractingWithMap = false;
 let isUserZoomingMap = false;
+let isCameraLockedForPlaceOrRoute = false;
 let shouldPreserveFollowZoomAfterUserZoom = false;
 let lastAppliedMapHeadingDegrees: number | null = null;
 let lastHeadingMapRotationAt = 0;
@@ -607,6 +612,7 @@ map.on("load", () => {
 });
 
 gpsRetryEl.addEventListener("click", () => {
+  unlockCameraForGpsAction();
   isGpsAutoRecoveryBlocked = false;
   gpsRecoveryAttemptCount = 0;
 
@@ -620,6 +626,8 @@ gpsRetryEl.addEventListener("click", () => {
 });
 
 centerGpsEl.addEventListener("click", () => {
+  unlockCameraForGpsAction();
+
   if (!isGpsActive) {
     startGps();
     return;
@@ -635,6 +643,8 @@ centerGpsEl.addEventListener("click", () => {
 });
 
 followGpsEl.addEventListener("click", () => {
+  unlockCameraForGpsAction();
+
   if (geolocateControl) {
     if (!isGpsActive) {
       startGps();
@@ -659,6 +669,8 @@ followGpsEl.addEventListener("click", () => {
 });
 
 headingEl.addEventListener("click", () => {
+  unlockCameraForGpsAction();
+
   if (!stopOrientation) {
     void startOrientation({ rotateMap: true });
     return;
@@ -792,7 +804,12 @@ function startGpsWatchdog() {
 }
 
 function recoverGpsIfStale() {
-  if (IS_MOCK_GPS_MODE || document.visibilityState === "hidden" || isGpsAutoRecoveryBlocked) {
+  if (
+    IS_MOCK_GPS_MODE ||
+    document.visibilityState === "hidden" ||
+    isGpsAutoRecoveryBlocked ||
+    isCameraLockedForPlaceOrRoute
+  ) {
     return;
   }
 
@@ -1634,6 +1651,8 @@ function selectPlace(place: Place) {
 }
 
 function disableMapTrackingForPlaceSelection() {
+  isCameraLockedForPlaceOrRoute = true;
+
   if (isFollowGpsEnabled) {
     setFollowGps(false);
   }
@@ -1643,6 +1662,11 @@ function disableMapTrackingForPlaceSelection() {
   }
 
   isUserInteractingWithMap = true;
+}
+
+function unlockCameraForGpsAction() {
+  isCameraLockedForPlaceOrRoute = false;
+  isUserInteractingWithMap = false;
 }
 
 function renderSelectedPlace(place: Place) {
