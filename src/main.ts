@@ -1,6 +1,6 @@
 import maplibregl from "maplibre-gl";
-import type { GeoJSONSourceSpecification } from "maplibre-gl";
-import { CloudSun, Gauge, Map, Ruler, Search, Settings, X, createIcons } from "lucide";
+import type { GeoJSONSource, GeoJSONSourceSpecification } from "maplibre-gl";
+import { CloudSun, Gauge, Map, Route, Ruler, Search, Settings, X, createIcons } from "lucide";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import { createGpsProvider, type GpsReading } from "./gps/provider";
@@ -41,6 +41,11 @@ const GPS_WATCHDOG_INTERVAL_MS = 10000;
 const GPS_MAX_RECOVERY_ATTEMPTS = 2;
 const SHORE_SEARCH_MARGIN_METERS = 2000;
 const LEMAN_SEARCH_VIEWBOX = "6.05,46.62,6.98,46.15";
+const ROUTE_DESTINATION_INSET_METERS = 60;
+const ROUTE_SHORE_LIMIT_METERS = 300;
+const ROUTE_GRID_CELL_METERS = 200;
+const ROUTE_GRID_SPECIAL_LINKS = 16;
+const ROUTE_GRID_SPECIAL_LINK_RADIUS_METERS = 1400;
 const IS_MOCK_GPS_MODE = import.meta.env.DEV && new URLSearchParams(window.location.search).get("gps") === "mock";
 
 type ScreenWakeLock = {
@@ -65,6 +70,16 @@ type ShorelineGeoJson = {
 };
 
 type Coordinate = [number, number];
+
+type LakeGeometry = {
+  polygon: Coordinate[];
+  shoreline: Coordinate[];
+};
+
+type RouteGeometry = {
+  polygon: Coordinate[];
+  boundary: Coordinate[];
+};
 
 type NominatimResult = {
   osm_type?: string;
@@ -92,6 +107,28 @@ type Place = {
   distanceFromUserMeters: number | null;
   distanceFromShoreMeters: number;
   enrichment: null;
+};
+
+type RouteResult = {
+  coordinates: Coordinate[];
+  distanceMeters: number;
+};
+
+type NearestBoundaryPoint = {
+  coordinate: Coordinate;
+  segmentIndex: number;
+};
+
+type RouteGridNode = {
+  coordinate: Coordinate;
+  gridX: number;
+  gridY: number;
+  isSpecial: boolean;
+};
+
+type RouteQueueItem = {
+  index: number;
+  priority: number;
 };
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -145,6 +182,10 @@ app.innerHTML = `
     <div>
       <strong id="selectedPlaceName">--</strong>
       <span id="selectedPlaceMeta">--</span>
+      <button id="selectedPlaceRoute" class="selected-place-route" type="button">
+        <i data-lucide="route" aria-hidden="true"></i>
+        <span>Itinéraire</span>
+      </button>
       <span id="selectedPlaceDistance">--</span>
     </div>
     <button id="selectedPlaceClose" class="selected-place-close" type="button" aria-label="Masquer le lieu">
@@ -250,6 +291,7 @@ createIcons({
     CloudSun,
     Gauge,
     Map,
+    Route,
     Ruler,
     Search,
     Settings,
@@ -273,6 +315,7 @@ const selectedPlaceCard = document.querySelector<HTMLElement>("#selectedPlaceCar
 const selectedPlaceName = document.querySelector<HTMLElement>("#selectedPlaceName");
 const selectedPlaceMeta = document.querySelector<HTMLElement>("#selectedPlaceMeta");
 const selectedPlaceDistance = document.querySelector<HTMLElement>("#selectedPlaceDistance");
+const selectedPlaceRoute = document.querySelector<HTMLButtonElement>("#selectedPlaceRoute");
 const selectedPlaceClose = document.querySelector<HTMLButtonElement>("#selectedPlaceClose");
 const weatherView = document.querySelector<HTMLElement>("#weatherView");
 const settingsView = document.querySelector<HTMLElement>("#settingsView");
@@ -318,6 +361,7 @@ if (
   !selectedPlaceName ||
   !selectedPlaceMeta ||
   !selectedPlaceDistance ||
+  !selectedPlaceRoute ||
   !selectedPlaceClose ||
   !weatherView ||
   !settingsView ||
@@ -365,6 +409,7 @@ const selectedPlaceCardEl = selectedPlaceCard;
 const selectedPlaceNameEl = selectedPlaceName;
 const selectedPlaceMetaEl = selectedPlaceMeta;
 const selectedPlaceDistanceEl = selectedPlaceDistance;
+const selectedPlaceRouteEl = selectedPlaceRoute;
 const selectedPlaceCloseEl = selectedPlaceClose;
 const weatherViewEl = weatherView;
 const settingsViewEl = settingsView;
@@ -499,7 +544,11 @@ let screenWakeLock: ScreenWakeLock | null = null;
 let isRequestingScreenWakeLock = false;
 let isScreenWakeLockEnabled = false;
 let shorelineCoordinatesPromise: Promise<Coordinate[]> | null = null;
+let lakeGeometryPromise: Promise<LakeGeometry> | null = null;
+let routeGeometryPromise: Promise<RouteGeometry> | null = null;
 let placeSearchResultsState: Place[] = [];
+let selectedPlaceState: Place | null = null;
+let selectedRouteDistanceMeters: number | null = null;
 
 const gpsProvider = IS_MOCK_GPS_MODE ? createGpsProvider() : null;
 const orientationProvider = createOrientationProvider();
@@ -522,6 +571,34 @@ map.on("load", () => {
       "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.2, 12, 2.8, 15, 4],
       "line-opacity": 0.88,
       "line-dasharray": [2, 1.2]
+    }
+  });
+
+  map.addSource("selected-route", {
+    type: "geojson",
+    data: createRouteGeoJson(null)
+  } satisfies GeoJSONSourceSpecification);
+
+  map.addLayer({
+    id: "selected-route-glow",
+    type: "line",
+    source: "selected-route",
+    paint: {
+      "line-color": "#ffffff",
+      "line-width": ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 7, 15, 10],
+      "line-opacity": 0.62,
+      "line-blur": 1.2
+    }
+  });
+
+  map.addLayer({
+    id: "selected-route-line",
+    type: "line",
+    source: "selected-route",
+    paint: {
+      "line-color": "#9f1239",
+      "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2, 12, 4, 15, 6],
+      "line-opacity": 0.96
     }
   });
 
@@ -891,6 +968,8 @@ function setPlaceSearchPanelOpen(open: boolean) {
 
   if (open) {
     selectedPlaceCardEl.hidden = true;
+    selectedPlaceState = null;
+    clearSelectedRoute();
     resetPlaceSearchPanel();
     window.setTimeout(() => {
       placeSearchInputEl.focus();
@@ -952,6 +1031,12 @@ placeSearchCloseEl.addEventListener("click", () => {
 
 selectedPlaceCloseEl.addEventListener("click", () => {
   selectedPlaceCardEl.hidden = true;
+  selectedPlaceState = null;
+  clearSelectedRoute();
+});
+
+selectedPlaceRouteEl.addEventListener("click", () => {
+  void renderRouteToSelectedPlace();
 });
 
 placeSearchFormEl.addEventListener("submit", (event) => {
@@ -1167,6 +1252,8 @@ function handleGpsReading(reading: GpsReading) {
   gpsRetryEl.hidden = true;
   lastReading = reading;
   renderReading(reading);
+  refreshSelectedPlaceDistance();
+  void refreshRouteButtonState();
   weatherRefreshEl.disabled = false;
 
   if (!hasLoadedInitialWeather) {
@@ -1381,6 +1468,8 @@ async function searchPlaces() {
   isPlaceSearchLoading = true;
   placeSearchResultsState = [];
   selectedPlaceCardEl.hidden = true;
+  selectedPlaceState = null;
+  clearSelectedRoute();
   placeSearchResultsEl.hidden = true;
   placeSearchResultsEl.replaceChildren();
   placeSearchStatusEl.hidden = false;
@@ -1522,7 +1611,7 @@ function renderPlaceSearchResults() {
     button.type = "button";
     button.innerHTML = `
       <strong>${escapeHtml(place.name)}</strong>
-      <span>${escapeHtml(formatPlaceResultMeta(place))}</span>
+      <span>${escapeHtml(formatPlaceSearchResultMeta(place))}</span>
     `;
     button.addEventListener("click", () => {
       selectPlace(place);
@@ -1533,24 +1622,220 @@ function renderPlaceSearchResults() {
 
 function selectPlace(place: Place) {
   renderSelectedPlace(place);
+  clearSelectedRoute();
   setPlaceSearchPanelOpen(false);
+  disableMapTrackingForPlaceSelection();
   map.easeTo({
     center: place.coordinates,
     zoom: Math.max(map.getZoom(), 14),
+    bearing: 0,
     duration: 700
   });
 }
 
+function disableMapTrackingForPlaceSelection() {
+  if (isFollowGpsEnabled) {
+    setFollowGps(false);
+  }
+
+  if (isHeadingMapEnabled) {
+    setHeadingMapEnabled(false);
+  }
+
+  isUserInteractingWithMap = true;
+}
+
 function renderSelectedPlace(place: Place) {
+  selectedPlaceState = {
+    ...place,
+    distanceFromUserMeters: getDistanceFromUserMeters(place.coordinates)
+  };
+  selectedRouteDistanceMeters = null;
   selectedPlaceCardEl.hidden = false;
-  selectedPlaceNameEl.textContent = place.name;
-  selectedPlaceMetaEl.textContent = formatPlaceResultMeta(place);
-  selectedPlaceDistanceEl.textContent =
-    place.distanceFromUserMeters === null ? "Distance GPS indisponible" : `Distance : ${formatDistance(place.distanceFromUserMeters)}`;
+  selectedPlaceNameEl.textContent = selectedPlaceState.name;
+  selectedPlaceMetaEl.textContent = formatPlaceResultMeta(selectedPlaceState);
+  renderSelectedRouteDistance();
+  void refreshRouteButtonState();
+}
+
+function refreshSelectedPlaceDistance() {
+  if (!selectedPlaceState || selectedPlaceCardEl.hidden) {
+    return;
+  }
+
+  selectedPlaceState = {
+    ...selectedPlaceState,
+    distanceFromUserMeters: getDistanceFromUserMeters(selectedPlaceState.coordinates)
+  };
+}
+
+async function refreshRouteButtonState() {
+  if (!selectedPlaceState || selectedPlaceCardEl.hidden) {
+    selectedPlaceRouteEl.disabled = true;
+    selectedPlaceRouteEl.title = "";
+    return;
+  }
+
+  const reading = lastUsableReading ?? lastReading;
+
+  if (!reading) {
+    selectedPlaceRouteEl.disabled = true;
+    selectedPlaceRouteEl.title = "GPS requis";
+    return;
+  }
+
+  try {
+    const lakeGeometry = await getLakeGeometry();
+    const isOnLake = isPointInPolygon([reading.longitude, reading.latitude], lakeGeometry.polygon);
+    selectedPlaceRouteEl.disabled = !isOnLake;
+    selectedPlaceRouteEl.title = isOnLake ? "" : "Itinéraire disponible uniquement depuis le lac";
+  } catch {
+    selectedPlaceRouteEl.disabled = true;
+    selectedPlaceRouteEl.title = "Itinéraire indisponible";
+  }
+}
+
+async function renderRouteToSelectedPlace() {
+  const place = selectedPlaceState;
+  const reading = lastUsableReading ?? lastReading;
+
+  if (!place || !reading || selectedPlaceRouteEl.disabled) {
+    return;
+  }
+
+  disableMapTrackingForPlaceSelection();
+  setRouteButtonCalculating(true);
+  await waitForNextPaint();
+
+  try {
+    const lakeGeometry = await getLakeGeometry();
+    const routeGeometry = await getRouteGeometry();
+    const start: Coordinate = [reading.longitude, reading.latitude];
+
+    if (!isPointInPolygon(start, lakeGeometry.polygon)) {
+      clearSelectedRoute();
+      setStatus("Itinéraire disponible uniquement depuis le lac.");
+      return;
+    }
+
+    const destination = getRouteDestinationOnLake(place.coordinates, lakeGeometry);
+    const route = createLakeRoute(start, destination, lakeGeometry, routeGeometry);
+
+    if (!route) {
+      clearSelectedRoute();
+      setStatus("Itinéraire indisponible.");
+      return;
+    }
+
+    setSelectedRoute(route);
+    selectedRouteDistanceMeters = route.distanceMeters;
+    renderSelectedRouteDistance();
+    setStatus(null);
+  } catch {
+    clearSelectedRoute();
+    setStatus("Itinéraire indisponible.");
+  } finally {
+    setRouteButtonCalculating(false);
+    void refreshRouteButtonState();
+  }
+}
+
+function renderSelectedRouteDistance() {
+  if (selectedRouteDistanceMeters === null) {
+    selectedPlaceDistanceEl.hidden = true;
+    selectedPlaceDistanceEl.textContent = "";
+    return;
+  }
+
+  selectedPlaceDistanceEl.hidden = false;
+  selectedPlaceDistanceEl.textContent = `Trajet : ${formatDistance(selectedRouteDistanceMeters)}`;
+}
+
+function setRouteButtonCalculating(isCalculating: boolean) {
+  selectedPlaceRouteEl.disabled = isCalculating;
+  selectedPlaceRouteEl.classList.toggle("is-loading", isCalculating);
+  selectedPlaceRouteEl.setAttribute("aria-busy", isCalculating ? "true" : "false");
+
+  const label = selectedPlaceRouteEl.querySelector("span");
+
+  if (label) {
+    label.textContent = isCalculating ? "Calcul..." : "Itinéraire";
+  }
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function setSelectedRoute(route: RouteResult) {
+  const source = map.getSource("selected-route") as GeoJSONSource | undefined;
+  source?.setData(createRouteGeoJson(route.coordinates));
+  fitMapToRoute(route.coordinates);
+}
+
+function clearSelectedRoute() {
+  selectedRouteDistanceMeters = null;
+  renderSelectedRouteDistance();
+  const source = map.getSource("selected-route") as GeoJSONSource | undefined;
+  source?.setData(createRouteGeoJson(null));
+}
+
+function createRouteGeoJson(coordinates: Coordinate[] | null) {
+  return {
+    type: "FeatureCollection" as const,
+    features: coordinates
+      ? [
+          {
+            type: "Feature" as const,
+            properties: {},
+            geometry: {
+              type: "LineString" as const,
+              coordinates
+            }
+          }
+        ]
+      : []
+  };
+}
+
+function fitMapToRoute(coordinates: Coordinate[]) {
+  if (coordinates.length < 2) {
+    return;
+  }
+
+  const bounds = coordinates.reduce(
+    (currentBounds, coordinate) => currentBounds.extend(coordinate),
+    new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
+  );
+
+  map.fitBounds(bounds, {
+    duration: 750,
+    maxZoom: 14,
+    padding: {
+      top: 90,
+      right: 72,
+      bottom: 170,
+      left: 32
+    }
+  });
 }
 
 function formatPlaceResultMeta(place: Place): string {
   return place.category ? formatCategory(place.category) : "Lieu";
+}
+
+function formatPlaceSearchResultMeta(place: Place): string {
+  const category = formatPlaceResultMeta(place);
+
+  if (place.distanceFromUserMeters === null) {
+    return category;
+  }
+
+  return `${category} · ${formatDistance(place.distanceFromUserMeters)}`;
 }
 
 function formatCategory(value: string): string {
@@ -1590,6 +1875,40 @@ async function getShorelineCoordinates(): Promise<Coordinate[]> {
   return shorelineCoordinatesPromise;
 }
 
+async function getLakeGeometry(): Promise<LakeGeometry> {
+  if (!lakeGeometryPromise) {
+    lakeGeometryPromise = getShorelineCoordinates().then((shoreline) => ({
+      shoreline,
+      polygon: closePolygon(shoreline)
+    }));
+  }
+
+  return lakeGeometryPromise;
+}
+
+async function getRouteGeometry(): Promise<RouteGeometry> {
+  if (!routeGeometryPromise) {
+    routeGeometryPromise = fetch("/data/leman-300m-indicative.geojson")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Route boundary unavailable");
+        }
+
+        return response.json() as Promise<ShorelineGeoJson>;
+      })
+      .then((data) => {
+        const boundary = extractShorelineCoordinates(data);
+
+        return {
+          boundary,
+          polygon: closePolygon(boundary)
+        };
+      });
+  }
+
+  return routeGeometryPromise;
+}
+
 function extractShorelineCoordinates(data: ShorelineGeoJson): Coordinate[] {
   const coordinates: Coordinate[] = [];
 
@@ -1623,6 +1942,626 @@ function parseLineStringCoordinates(coordinates: unknown[]): Coordinate[] {
 
     return [[longitude, latitude] satisfies Coordinate];
   });
+}
+
+function closePolygon(coordinates: Coordinate[]): Coordinate[] {
+  const first = coordinates[0];
+  const last = coordinates[coordinates.length - 1];
+
+  if (!first || !last) {
+    throw new Error("Invalid lake polygon");
+  }
+
+  if (first[0] === last[0] && first[1] === last[1]) {
+    return coordinates;
+  }
+
+  return [...coordinates, first];
+}
+
+function getRouteDestinationOnLake(destination: Coordinate, lakeGeometry: LakeGeometry): Coordinate {
+  if (isPointInPolygon(destination, lakeGeometry.polygon)) {
+    return destination;
+  }
+
+  const shorePoint = getNearestPointOnShoreline(destination, lakeGeometry.shoreline);
+  return insetPointIntoLake(shorePoint, lakeGeometry.polygon);
+}
+
+function getRouteGatePoint(point: Coordinate, lakeGeometry: LakeGeometry, routeGeometry: RouteGeometry): Coordinate {
+  return getNearestDistanceToShoreMeters(point, lakeGeometry.shoreline) >= ROUTE_SHORE_LIMIT_METERS
+    ? point
+    : getNearestPointOnShoreline(point, routeGeometry.boundary);
+}
+
+function createLakeRoute(
+  start: Coordinate,
+  destination: Coordinate,
+  lakeGeometry: LakeGeometry,
+  routeGeometry: RouteGeometry
+): RouteResult | null {
+  const routeStart = getRouteGatePoint(start, lakeGeometry, routeGeometry);
+  const arrivalGate = getRouteGatePoint(destination, lakeGeometry, routeGeometry);
+  const middleRoute = createVisibilityRoute(routeStart, arrivalGate, routeGeometry);
+
+  if (!middleRoute) {
+    return null;
+  }
+
+  const coordinates = dedupeSequentialCoordinates([start, ...middleRoute, destination]);
+
+  return {
+    coordinates,
+    distanceMeters: getRouteDistanceMeters(coordinates)
+  };
+}
+
+function createVisibilityRoute(
+  start: Coordinate,
+  arrivalGate: Coordinate,
+  routeGeometry: RouteGeometry
+): Coordinate[] | null {
+  if (routeSegmentStaysInPolygon(start, arrivalGate, routeGeometry.polygon)) {
+    return [start, arrivalGate];
+  }
+
+  return createGridRoute(start, arrivalGate, routeGeometry);
+}
+
+function createGridRoute(
+  start: Coordinate,
+  arrivalGate: Coordinate,
+  routeGeometry: RouteGeometry
+): Coordinate[] | null {
+  const grid = createRouteGrid(routeGeometry.polygon, start, arrivalGate);
+  const rawPath = findShortestGridPath(grid.nodes, grid.gridIndex, start, arrivalGate, routeGeometry.polygon);
+
+  return rawPath ? smoothRoutePath(rawPath, routeGeometry.polygon) : null;
+}
+
+function createRouteGrid(
+  polygon: Coordinate[],
+  start: Coordinate,
+  arrivalGate: Coordinate
+): { nodes: RouteGridNode[]; gridIndex: globalThis.Map<string, number> } {
+  const bounds = getCoordinateBounds([...polygon, start, arrivalGate]);
+  const centerLatitude = (bounds.minLatitude + bounds.maxLatitude) / 2;
+  const latitudeStep = ROUTE_GRID_CELL_METERS / 111320;
+  const longitudeStep = ROUTE_GRID_CELL_METERS / (Math.cos(degreesToRadians(centerLatitude)) * 111320);
+  const nodes: RouteGridNode[] = [
+    { coordinate: start, gridX: -1, gridY: -1, isSpecial: true },
+    { coordinate: arrivalGate, gridX: -2, gridY: -2, isSpecial: true }
+  ];
+  const gridIndex = new globalThis.Map<string, number>();
+
+  const minLongitude = bounds.minLongitude - longitudeStep;
+  const maxLongitude = bounds.maxLongitude + longitudeStep;
+  const minLatitude = bounds.minLatitude - latitudeStep;
+  const maxLatitude = bounds.maxLatitude + latitudeStep;
+  let gridY = 0;
+
+  for (let latitude = minLatitude; latitude <= maxLatitude; latitude += latitudeStep, gridY += 1) {
+    let gridX = 0;
+
+    for (let longitude = minLongitude; longitude <= maxLongitude; longitude += longitudeStep, gridX += 1) {
+      const coordinate: Coordinate = [longitude, latitude];
+
+      if (!isPointInPolygon(coordinate, polygon)) {
+        continue;
+      }
+
+      const index = nodes.length;
+      nodes.push({ coordinate, gridX, gridY, isSpecial: false });
+      gridIndex.set(getRouteGridKey(gridX, gridY), index);
+    }
+  }
+
+  return { nodes, gridIndex };
+}
+
+function findShortestGridPath(
+  nodes: RouteGridNode[],
+  gridIndex: globalThis.Map<string, number>,
+  start: Coordinate,
+  arrivalGate: Coordinate,
+  polygon: Coordinate[]
+): Coordinate[] | null {
+  const startIndex = 0;
+  const destinationIndex = 1;
+  const costs = nodes.map(() => Number.POSITIVE_INFINITY);
+  const previous = nodes.map(() => -1);
+  const closed = nodes.map(() => false);
+  const queue = new RoutePriorityQueue();
+  costs[startIndex] = 0;
+  queue.push({ index: startIndex, priority: coordinateDistanceMeters(start, arrivalGate) });
+
+  while (queue.size > 0) {
+    const current = queue.pop();
+
+    if (!current) {
+      break;
+    }
+
+    const currentIndex = current.index;
+
+    if (closed[currentIndex]) {
+      continue;
+    }
+
+    if (currentIndex === destinationIndex) {
+      break;
+    }
+
+    closed[currentIndex] = true;
+
+    for (const nextIndex of getRouteGridNeighbors(currentIndex, nodes, gridIndex, polygon)) {
+      if (closed[nextIndex]) {
+        continue;
+      }
+
+      const nextCost = costs[currentIndex] + coordinateDistanceMeters(nodes[currentIndex].coordinate, nodes[nextIndex].coordinate);
+
+      if (nextCost < costs[nextIndex]) {
+        costs[nextIndex] = nextCost;
+        previous[nextIndex] = currentIndex;
+        queue.push({
+          index: nextIndex,
+          priority: nextCost + coordinateDistanceMeters(nodes[nextIndex].coordinate, arrivalGate)
+        });
+      }
+    }
+  }
+
+  if (!Number.isFinite(costs[destinationIndex])) {
+    return null;
+  }
+
+  const path: Coordinate[] = [];
+
+  for (let index = destinationIndex; index !== -1; index = previous[index]) {
+    path.unshift(nodes[index].coordinate);
+  }
+
+  return path[0] && coordinatesAlmostEqual(path[0], nodes[startIndex].coordinate) ? path : null;
+}
+
+function getRouteGridNeighbors(
+  nodeIndex: number,
+  nodes: RouteGridNode[],
+  gridIndex: globalThis.Map<string, number>,
+  polygon: Coordinate[]
+): number[] {
+  const node = nodes[nodeIndex];
+
+  if (node.isSpecial) {
+    return getVisibleSpecialLinks(nodeIndex, nodes, polygon);
+  }
+
+  const neighbors: number[] = [];
+
+  for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
+    for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
+      if (deltaX === 0 && deltaY === 0) {
+        continue;
+      }
+
+      const neighborIndex = gridIndex.get(getRouteGridKey(node.gridX + deltaX, node.gridY + deltaY));
+
+      if (neighborIndex === undefined) {
+        continue;
+      }
+
+      if (shortGridSegmentStaysInPolygon(node.coordinate, nodes[neighborIndex].coordinate, polygon)) {
+        neighbors.push(neighborIndex);
+      }
+    }
+  }
+
+  for (const specialIndex of [0, 1]) {
+    if (
+      specialIndex !== nodeIndex &&
+      coordinateDistanceMeters(node.coordinate, nodes[specialIndex].coordinate) <= ROUTE_GRID_SPECIAL_LINK_RADIUS_METERS &&
+      routeSegmentStaysInPolygon(node.coordinate, nodes[specialIndex].coordinate, polygon)
+    ) {
+      neighbors.push(specialIndex);
+    }
+  }
+
+  return neighbors;
+}
+
+function getVisibleSpecialLinks(
+  nodeIndex: number,
+  nodes: RouteGridNode[],
+  polygon: Coordinate[]
+): number[] {
+  const node = nodes[nodeIndex];
+  const links = nodes
+    .map((candidate, index) => ({
+      index,
+      distanceMeters: coordinateDistanceMeters(node.coordinate, candidate.coordinate)
+    }))
+    .filter(({ index, distanceMeters }) => {
+      if (index === nodeIndex || distanceMeters > ROUTE_GRID_SPECIAL_LINK_RADIUS_METERS) {
+        return false;
+      }
+
+      return routeSegmentStaysInPolygon(node.coordinate, nodes[index].coordinate, polygon);
+    })
+    .sort((left, right) => left.distanceMeters - right.distanceMeters)
+    .slice(0, ROUTE_GRID_SPECIAL_LINKS)
+    .map(({ index }) => index);
+
+  return links;
+}
+
+function smoothRoutePath(path: Coordinate[], polygon: Coordinate[]): Coordinate[] {
+  if (path.length <= 2) {
+    return path;
+  }
+
+  const smoothed: Coordinate[] = [path[0]];
+  let anchorIndex = 0;
+
+  while (anchorIndex < path.length - 1) {
+    let nextIndex = path.length - 1;
+
+    while (nextIndex > anchorIndex + 1 && !routeSegmentStaysInPolygon(path[anchorIndex], path[nextIndex], polygon)) {
+      nextIndex -= 1;
+    }
+
+    smoothed.push(path[nextIndex]);
+    anchorIndex = nextIndex;
+  }
+
+  return smoothed;
+}
+
+function shortGridSegmentStaysInPolygon(start: Coordinate, end: Coordinate, polygon: Coordinate[]): boolean {
+  const midpoint: Coordinate = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+  return isPointInPolygon(midpoint, polygon);
+}
+
+function getCoordinateBounds(coordinates: Coordinate[]) {
+  return coordinates.reduce(
+    (bounds, coordinate) => ({
+      minLongitude: Math.min(bounds.minLongitude, coordinate[0]),
+      maxLongitude: Math.max(bounds.maxLongitude, coordinate[0]),
+      minLatitude: Math.min(bounds.minLatitude, coordinate[1]),
+      maxLatitude: Math.max(bounds.maxLatitude, coordinate[1])
+    }),
+    {
+      minLongitude: Number.POSITIVE_INFINITY,
+      maxLongitude: Number.NEGATIVE_INFINITY,
+      minLatitude: Number.POSITIVE_INFINITY,
+      maxLatitude: Number.NEGATIVE_INFINITY
+    }
+  );
+}
+
+function getRouteGridKey(gridX: number, gridY: number): string {
+  return `${gridX}:${gridY}`;
+}
+
+class RoutePriorityQueue {
+  private items: RouteQueueItem[] = [];
+
+  get size() {
+    return this.items.length;
+  }
+
+  push(item: RouteQueueItem) {
+    this.items.push(item);
+    this.bubbleUp(this.items.length - 1);
+  }
+
+  pop(): RouteQueueItem | null {
+    const first = this.items[0];
+
+    if (!first) {
+      return null;
+    }
+
+    const last = this.items.pop();
+
+    if (last && this.items.length > 0) {
+      this.items[0] = last;
+      this.sinkDown(0);
+    }
+
+    return first;
+  }
+
+  private bubbleUp(index: number) {
+    let currentIndex = index;
+
+    while (currentIndex > 0) {
+      const parentIndex = Math.floor((currentIndex - 1) / 2);
+
+      if (this.items[parentIndex].priority <= this.items[currentIndex].priority) {
+        break;
+      }
+
+      this.swap(parentIndex, currentIndex);
+      currentIndex = parentIndex;
+    }
+  }
+
+  private sinkDown(index: number) {
+    let currentIndex = index;
+
+    while (true) {
+      const leftIndex = currentIndex * 2 + 1;
+      const rightIndex = currentIndex * 2 + 2;
+      let smallestIndex = currentIndex;
+
+      if (this.items[leftIndex] && this.items[leftIndex].priority < this.items[smallestIndex].priority) {
+        smallestIndex = leftIndex;
+      }
+
+      if (this.items[rightIndex] && this.items[rightIndex].priority < this.items[smallestIndex].priority) {
+        smallestIndex = rightIndex;
+      }
+
+      if (smallestIndex === currentIndex) {
+        break;
+      }
+
+      this.swap(currentIndex, smallestIndex);
+      currentIndex = smallestIndex;
+    }
+  }
+
+  private swap(leftIndex: number, rightIndex: number) {
+    const left = this.items[leftIndex];
+    this.items[leftIndex] = this.items[rightIndex];
+    this.items[rightIndex] = left;
+  }
+}
+
+function getRouteDistanceMeters(coordinates: Coordinate[]): number {
+  let distanceMeters = 0;
+
+  for (let index = 0; index < coordinates.length - 1; index += 1) {
+    distanceMeters += coordinateDistanceMeters(coordinates[index], coordinates[index + 1]);
+  }
+
+  return distanceMeters;
+}
+
+function dedupeSequentialCoordinates(coordinates: Coordinate[]): Coordinate[] {
+  return coordinates.filter((coordinate, index) => {
+    const previous = coordinates[index - 1];
+
+    if (!previous) {
+      return true;
+    }
+
+    return coordinateDistanceMeters(previous, coordinate) > 1;
+  });
+}
+
+function routeSegmentStaysInPolygon(start: Coordinate, end: Coordinate, polygon: Coordinate[]): boolean {
+  const midpoint: Coordinate = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+
+  if (!isPointInPolygon(midpoint, polygon)) {
+    return false;
+  }
+
+  for (let index = 0; index < polygon.length - 1; index += 1) {
+    const edgeStart = polygon[index];
+    const edgeEnd = polygon[index + 1];
+
+    if (
+      segmentsProperlyIntersect(start, end, edgeStart, edgeEnd) &&
+      !isAllowedRouteBoundaryTouch(start, end, edgeStart, edgeEnd)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function segmentsProperlyIntersect(a: Coordinate, b: Coordinate, c: Coordinate, d: Coordinate): boolean {
+  if (!segmentBoundingBoxesOverlap(a, b, c, d)) {
+    return false;
+  }
+
+  const abC = orientation(a, b, c);
+  const abD = orientation(a, b, d);
+  const cdA = orientation(c, d, a);
+  const cdB = orientation(c, d, b);
+
+  if (abC === 0 && isPointOnSegment(c, a, b)) {
+    return true;
+  }
+
+  if (abD === 0 && isPointOnSegment(d, a, b)) {
+    return true;
+  }
+
+  if (cdA === 0 && isPointOnSegment(a, c, d)) {
+    return true;
+  }
+
+  if (cdB === 0 && isPointOnSegment(b, c, d)) {
+    return true;
+  }
+
+  return abC !== abD && cdA !== cdB;
+}
+
+function segmentBoundingBoxesOverlap(a: Coordinate, b: Coordinate, c: Coordinate, d: Coordinate): boolean {
+  return (
+    Math.max(a[0], b[0]) >= Math.min(c[0], d[0]) &&
+    Math.max(c[0], d[0]) >= Math.min(a[0], b[0]) &&
+    Math.max(a[1], b[1]) >= Math.min(c[1], d[1]) &&
+    Math.max(c[1], d[1]) >= Math.min(a[1], b[1])
+  );
+}
+
+function orientation(a: Coordinate, b: Coordinate, c: Coordinate): -1 | 0 | 1 {
+  const value = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+
+  if (Math.abs(value) < 1e-12) {
+    return 0;
+  }
+
+  return value > 0 ? 1 : -1;
+}
+
+function isPointOnSegment(point: Coordinate, start: Coordinate, end: Coordinate): boolean {
+  return (
+    point[0] >= Math.min(start[0], end[0]) - 1e-12 &&
+    point[0] <= Math.max(start[0], end[0]) + 1e-12 &&
+    point[1] >= Math.min(start[1], end[1]) - 1e-12 &&
+    point[1] <= Math.max(start[1], end[1]) + 1e-12
+  );
+}
+
+function isAllowedRouteBoundaryTouch(a: Coordinate, b: Coordinate, c: Coordinate, d: Coordinate): boolean {
+  return (
+    coordinatesAlmostEqual(a, c) ||
+    coordinatesAlmostEqual(a, d) ||
+    coordinatesAlmostEqual(b, c) ||
+    coordinatesAlmostEqual(b, d) ||
+    isPointOnSegment(a, c, d) ||
+    isPointOnSegment(b, c, d)
+  );
+}
+
+function coordinatesAlmostEqual(left: Coordinate, right: Coordinate): boolean {
+  return Math.abs(left[0] - right[0]) < 1e-9 && Math.abs(left[1] - right[1]) < 1e-9;
+}
+
+function isPointInPolygon(point: Coordinate, polygon: Coordinate[]): boolean {
+  if (isPointOnPolygonBoundary(point, polygon)) {
+    return true;
+  }
+
+  const [longitude, latitude] = point;
+  let isInside = false;
+
+  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
+    const [currentLongitude, currentLatitude] = polygon[index];
+    const [previousLongitude, previousLatitude] = polygon[previousIndex];
+    const intersects =
+      currentLatitude > latitude !== previousLatitude > latitude &&
+      longitude <
+        ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) /
+          (previousLatitude - currentLatitude) +
+          currentLongitude;
+
+    if (intersects) {
+      isInside = !isInside;
+    }
+  }
+
+  return isInside;
+}
+
+function isPointOnPolygonBoundary(point: Coordinate, polygon: Coordinate[]): boolean {
+  for (let index = 0; index < polygon.length - 1; index += 1) {
+    if (getDistanceToSegmentMeters(point, polygon[index], polygon[index + 1]) <= 5) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getNearestPointOnShoreline(point: Coordinate, shoreline: Coordinate[]): Coordinate {
+  return getNearestPointOnPolyline(point, shoreline).coordinate;
+}
+
+function getNearestPointOnPolyline(point: Coordinate, coordinates: Coordinate[]): NearestBoundaryPoint {
+  let nearestPoint: Coordinate | null = null;
+  let nearestSegmentIndex = 0;
+  let nearestDistanceMeters = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < coordinates.length - 1; index += 1) {
+    const candidate = getClosestPointOnSegment(point, coordinates[index], coordinates[index + 1]);
+    const distanceMeters = coordinateDistanceMeters(point, candidate);
+
+    if (distanceMeters < nearestDistanceMeters) {
+      nearestDistanceMeters = distanceMeters;
+      nearestPoint = candidate;
+      nearestSegmentIndex = index;
+    }
+  }
+
+  if (!nearestPoint) {
+    throw new Error("Invalid polyline nearest point");
+  }
+
+  return {
+    coordinate: nearestPoint,
+    segmentIndex: nearestSegmentIndex
+  };
+}
+
+function getClosestPointOnSegment(point: Coordinate, start: Coordinate, end: Coordinate): Coordinate {
+  const latitudeRad = degreesToRadians(point[1]);
+  const metersPerDegreeLatitude = 111320;
+  const metersPerDegreeLongitude = Math.cos(latitudeRad) * metersPerDegreeLatitude;
+  const startX = (start[0] - point[0]) * metersPerDegreeLongitude;
+  const startY = (start[1] - point[1]) * metersPerDegreeLatitude;
+  const endX = (end[0] - point[0]) * metersPerDegreeLongitude;
+  const endY = (end[1] - point[1]) * metersPerDegreeLatitude;
+  const segmentX = endX - startX;
+  const segmentY = endY - startY;
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+
+  if (segmentLengthSquared === 0) {
+    return start;
+  }
+
+  const projection = Math.max(0, Math.min(1, -(startX * segmentX + startY * segmentY) / segmentLengthSquared));
+
+  return [
+    start[0] + (end[0] - start[0]) * projection,
+    start[1] + (end[1] - start[1]) * projection
+  ];
+}
+
+function insetPointIntoLake(point: Coordinate, polygon: Coordinate[]): Coordinate {
+  const center = getPolygonCenter(polygon);
+  let inset = movePointToward(point, center, ROUTE_DESTINATION_INSET_METERS);
+
+  for (let attempt = 0; attempt < 6 && !isPointInPolygon(inset, polygon); attempt += 1) {
+    inset = movePointToward(inset, center, ROUTE_DESTINATION_INSET_METERS);
+  }
+
+  return inset;
+}
+
+function getPolygonCenter(polygon: Coordinate[]): Coordinate {
+  const totals = polygon.reduce(
+    (accumulator, coordinate) => {
+      accumulator.longitude += coordinate[0];
+      accumulator.latitude += coordinate[1];
+      return accumulator;
+    },
+    { longitude: 0, latitude: 0 }
+  );
+
+  return [totals.longitude / polygon.length, totals.latitude / polygon.length];
+}
+
+function movePointToward(from: Coordinate, to: Coordinate, meters: number): Coordinate {
+  const distanceMeters = coordinateDistanceMeters(from, to);
+
+  if (distanceMeters === 0) {
+    return from;
+  }
+
+  const ratio = Math.min(1, meters / distanceMeters);
+
+  return [
+    from[0] + (to[0] - from[0]) * ratio,
+    from[1] + (to[1] - from[1]) * ratio
+  ];
 }
 
 function getNearestShoreDistanceMeters(reading: GpsReading, shoreline: Coordinate[]): number {
@@ -1917,6 +2856,25 @@ function smoothSpeed(nextKmh: number): number {
 
   lastSmoothedSpeedKmh = lastSmoothedSpeedKmh * 0.65 + nextKmh * 0.35;
   return lastSmoothedSpeedKmh;
+}
+
+function coordinateDistanceMeters(from: Coordinate, to: Coordinate): number {
+  return haversineDistanceMeters(
+    {
+      latitude: from[1],
+      longitude: from[0],
+      accuracy: 0,
+      timestamp: 0,
+      speedMetersPerSecond: null
+    },
+    {
+      latitude: to[1],
+      longitude: to[0],
+      accuracy: 0,
+      timestamp: 0,
+      speedMetersPerSecond: null
+    }
+  );
 }
 
 function haversineDistanceMeters(from: GpsReading, to: GpsReading): number {
