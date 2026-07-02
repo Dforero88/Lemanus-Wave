@@ -1,5 +1,5 @@
 export const BUILD_INFO = {
-  "commit": "16c2a42",
+  "commit": "14673a1",
   "branch": "main",
-  "builtAt": "2026-07-01T15:06:31.428Z"
+  "builtAt": "2026-07-02T13:28:24.112Z"
 } as const;

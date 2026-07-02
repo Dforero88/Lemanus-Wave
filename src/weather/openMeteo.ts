@@ -1,6 +1,6 @@
 import type { GpsReading } from "../gps/provider";
 
-export type WeatherPeriod = "now" | "plus1h";
+export type WeatherPeriod = "now" | "plus30m" | "plus1h" | "plus2h";
 
 export type WeatherSnapshot = {
   period: WeatherPeriod;
@@ -14,7 +14,7 @@ export type WeatherSnapshot = {
 
 export type WeatherForecast = {
   now: WeatherSnapshot;
-  plus1h: WeatherSnapshot | null;
+  forecasts: WeatherSnapshot[];
   updatedAt: string;
 };
 
@@ -27,6 +27,13 @@ type OpenMeteoResponse = {
     wind_direction_10m?: number;
   };
   hourly?: {
+    time?: string[];
+    temperature_2m?: number[];
+    weather_code?: number[];
+    wind_speed_10m?: number[];
+    wind_direction_10m?: number[];
+  };
+  minutely_15?: {
     time?: string[];
     temperature_2m?: number[];
     weather_code?: number[];
@@ -48,7 +55,9 @@ export async function fetchWeatherForPosition(reading: GpsReading): Promise<Weat
     longitude: reading.longitude.toString(),
     current: CURRENT_FIELDS,
     hourly: CURRENT_FIELDS,
+    minutely_15: CURRENT_FIELDS,
     forecast_hours: "3",
+    forecast_minutely_15: "9",
     timezone: "auto",
     wind_speed_unit: "kmh"
   });
@@ -64,7 +73,7 @@ export async function fetchWeatherForPosition(reading: GpsReading): Promise<Weat
 
   return {
     now,
-    plus1h: createPlus1hSnapshot(data, now.time),
+    forecasts: createForecastSnapshots(data, now.time),
     updatedAt: new Date().toISOString()
   };
 }
@@ -83,29 +92,45 @@ function createCurrentSnapshot(data: OpenMeteoResponse): WeatherSnapshot {
   };
 }
 
-function createPlus1hSnapshot(data: OpenMeteoResponse, currentTime: string): WeatherSnapshot | null {
-  const hourly = data.hourly;
+function createForecastSnapshots(data: OpenMeteoResponse, currentTime: string): WeatherSnapshot[] {
+  const currentDate = new Date(currentTime);
+  const targets: Array<{ period: WeatherPeriod; label: string; minutes: number }> = [
+    { period: "plus30m", label: "+30 min", minutes: 30 },
+    { period: "plus1h", label: "+1h", minutes: 60 },
+    { period: "plus2h", label: "+2h", minutes: 120 }
+  ];
 
-  if (!hourly?.time?.length) {
+  return targets
+    .map((target) => createForecastSnapshot(data, currentDate, target))
+    .filter((snapshot): snapshot is WeatherSnapshot => snapshot !== null);
+}
+
+function createForecastSnapshot(
+  data: OpenMeteoResponse,
+  currentDate: Date,
+  target: { period: WeatherPeriod; label: string; minutes: number }
+): WeatherSnapshot | null {
+  const source = data.minutely_15?.time?.length ? data.minutely_15 : data.hourly;
+
+  if (!source?.time?.length) {
     return null;
   }
 
-  const currentDate = new Date(currentTime);
-  const targetTime = currentDate.getTime() + 60 * 60 * 1000;
-  const index = hourly.time.findIndex((time) => new Date(time).getTime() >= targetTime);
+  const targetTime = currentDate.getTime() + target.minutes * 60 * 1000;
+  const index = source.time.findIndex((time) => new Date(time).getTime() >= targetTime);
 
   if (index < 0) {
     return null;
   }
 
   return {
-    period: "plus1h",
-    label: "+1h",
-    time: hourly.time[index],
-    temperatureC: numberOrNull(hourly.temperature_2m?.[index]),
-    weatherCode: numberOrNull(hourly.weather_code?.[index]),
-    windSpeedKmh: numberOrNull(hourly.wind_speed_10m?.[index]),
-    windDirectionDeg: numberOrNull(hourly.wind_direction_10m?.[index])
+    period: target.period,
+    label: target.label,
+    time: source.time[index],
+    temperatureC: numberOrNull(source.temperature_2m?.[index]),
+    weatherCode: numberOrNull(source.weather_code?.[index]),
+    windSpeedKmh: numberOrNull(source.wind_speed_10m?.[index]),
+    windDirectionDeg: numberOrNull(source.wind_direction_10m?.[index])
   };
 }
 

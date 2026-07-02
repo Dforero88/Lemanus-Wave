@@ -2,65 +2,49 @@
 
 ## MVP 1
 
-Le MVP 1 est globalement OK et dépassé.
-
-- Carte du Léman : OK.
-- Position GPS : OK, avec demande automatique au chargement.
-- Mode mock local : OK, point fixe sur le Léman.
-- Vitesse : OK, avec garde-fous et calcul seulement quand utile.
-- Ligne indicative des 300 m : OK, basée sur GeoJSON.
-- Recentrage GPS : ajouté.
-- Suivi GPS : ajouté.
-- Orientation téléphone : ajouté.
-- UI mobile avec menu bas : ajouté.
-- Réglages : ajouté.
-- Version/commit visible dans Réglages : ajouté.
+| Feature | État | Ajout en cours de route |
+| --- | --- | --- |
+| Carte du Léman | OK | N |
+| Position GPS | OK | N |
+| Mode mock local | OK | Y |
+| Vitesse | OK | N |
+| Ligne indicative des 300 m | OK | N |
+| Recentrage GPS | OK | Y |
+| Suivi GPS | OK | Y |
+| Orientation téléphone | OK | Y |
+| UI mobile avec menu bas | OK | Y |
+| Réglages | OK | Y |
+| Version/commit visible dans Réglages | OK | Y |
 
 ## MVP 2
 
-Le MVP 2 est partiellement réalisé, avec plusieurs ajouts au-delà du scope initial.
+| Feature | État | Ajout en cours de route |
+| --- | --- | --- |
+| Météo actuelle | OK | N |
+| Météo +1h | OK | Y |
+| Vent et direction | OK | N |
+| Rafales | Supprimé volontairement | N |
+| Ports principaux | NOK, pas de dataset dédié | N |
+| Recherche de lieux OpenStreetMap autour du Léman | OK | Y |
+| Cap approximatif/orientation | OK | N |
+| Distance vers port/point | OK à vol d’oiseau | N |
+| ETA simple | En cours via mode navigation | N |
+| Itinéraire vers destination | OK, indicatif | Y |
+| Navigation démarrée | Première version OK | Y |
 
-- Météo actuelle : OK.
-- Météo +1h : OK, affichée directement avec la météo actuelle.
-- Vent et direction : OK.
-- Rafales : supprimé volontairement.
-- Ports principaux : pas implémenté comme dataset dédié.
-- Recherche de lieux OpenStreetMap autour du Léman : ajoutée, couvre en partie le besoin ports/lieux.
-- Cap approximatif/orientation : OK via orientation téléphone.
-- Distance vers port/point : OK à vol d’oiseau dans les résultats de recherche.
-- ETA simple : commencé via mode navigation.
-- Itinéraire vers destination : ajouté, indicatif, avec calcul sur grille virtuelle.
-- Navigation démarrée : ajoutée en première version avec distance restante, vitesse, temps et ETA.
+## Suite
 
-## Ajouts faits en cours de route
+| Sujet | État | Priorité |
+| --- | --- | --- |
+| Stabiliser l’écran météo final | En cours | Haute |
+| Finaliser l’UX du mode navigation | En cours | Haute |
+| Tester GPS/suivi/orientation en conditions réelles | À faire | Haute |
+| Décider si l’itinéraire reste indicatif ou devient une fonctionnalité plus robuste | À décider | Moyenne |
+| Ajouter ports favoris/dataset local si OpenStreetMap ne suffit pas | À décider | Moyenne |
+| Garder le modèle static web app sans backend | OK | Continue |
 
-- Déploiement production Infomaniak via GitHub Actions.
-- Build statique compatible Apache/PHP, sans runtime Node.js en production.
-- Icônes météo animées Meteocons.
-- Icônes Lucide pour cohérence UI.
-- Wake Lock expérimental dans les réglages, avec limite iOS.
-- Recherche de lieux via OpenStreetMap/Nominatim.
-- Fiche lieu sélectionné.
-- Bouton Itinéraire.
-- Calcul de trajet indicatif en bateau, sans routage routier.
-- Mode navigation avec bouton Démarrer/Quitter.
-- Masquage des cartes flottantes en navigation.
-- Distance au bord du lac.
-- Améliorations GPS après retour d’app/veille.
-- Suppression de la pluie en mm, car la donnée était peu fiable et peu intuitive.
+## Notes
 
-## Points encore fragiles ou à stabiliser
-
-- Itinéraire : fonctionnel mais indicatif, pas légal et pas un routage maritime officiel.
-- Orientation/suivi GPS : beaucoup mieux, mais à continuer de tester en conditions réelles sur iPhone.
-- Météo : gratuite et simple, mais pas radar live.
-- Recherche OSM : dépend de Nominatim, donc les résultats peuvent être irréguliers.
-- Navigation active : première version, à valider sur lac/voiture/téléphone.
-
-## Suite logique
-
-1. Stabiliser l’écran météo final.
-2. Finaliser l’UX du mode navigation.
-3. Tester GPS/suivi/orientation en conditions réelles.
-4. Décider si l’itinéraire reste une aide indicative simple ou devient une vraie fonctionnalité plus robuste.
-5. Ajouter ports favoris/dataset local seulement si OpenStreetMap ne suffit pas.
+- L’itinéraire reste indicatif : ce n’est pas une référence légale ni un routage maritime officiel.
+- La météo reste basée sur une source gratuite et simple, sans radar live.
+- La recherche dépend d’OpenStreetMap/Nominatim, donc les résultats peuvent être irréguliers.

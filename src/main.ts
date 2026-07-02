@@ -7,6 +7,7 @@ import {
   Locate,
   LocateFixed,
   Map,
+  MapPin,
   Navigation,
   Route,
   Ruler,
@@ -231,7 +232,6 @@ app.innerHTML = `
         <header class="panel-header weather-screen-header">
           <div>
             <span class="panel-title">Météo</span>
-            <h1 class="weather-screen-title">Conditions</h1>
           </div>
           <button id="weatherRefresh" class="panel-toggle" type="button" aria-label="Actualiser la météo" disabled>↻</button>
         </header>
@@ -261,26 +261,8 @@ app.innerHTML = `
               </div>
             </article>
             <article class="weather-period weather-period-forecast">
-              <span class="weather-period-label">Dans 1h</span>
-              <div class="weather-period-row">
-                <div class="weather-primary">
-                  <span class="weather-icon-frame" aria-hidden="true">
-                    <img id="weatherPlus1hIcon" class="weather-icon" src="/weather-icons/not-available.svg" alt="" />
-                  </span>
-                  <div class="weather-main">
-                    <strong id="weatherPlus1hTemp">--</strong>
-                    <span id="weatherPlus1hCondition">--</span>
-                  </div>
-                </div>
-                <div class="metric-group">
-                  <span class="metric-label">Vent</span>
-                  <div class="wind-row">
-                    <strong id="weatherPlus1hWind">--</strong>
-                    <span id="weatherPlus1hWindArrow" class="wind-arrow" aria-hidden="true">↑</span>
-                  </div>
-                  <span id="weatherPlus1hWindDirection">--</span>
-                </div>
-              </div>
+              <span class="weather-period-label">Prévisions</span>
+              <div id="weatherForecastList" class="weather-forecast-list"></div>
             </article>
             <span id="weatherUpdatedAt" class="weather-updated">--</span>
           </div>
@@ -389,6 +371,7 @@ createIcons({
     Locate,
     LocateFixed,
     Map,
+    MapPin,
     Navigation,
     Route,
     Ruler,
@@ -438,12 +421,7 @@ const weatherNowCondition = document.querySelector<HTMLElement>("#weatherNowCond
 const weatherNowWind = document.querySelector<HTMLElement>("#weatherNowWind");
 const weatherNowWindArrow = document.querySelector<HTMLElement>("#weatherNowWindArrow");
 const weatherNowWindDirection = document.querySelector<HTMLElement>("#weatherNowWindDirection");
-const weatherPlus1hIcon = document.querySelector<HTMLImageElement>("#weatherPlus1hIcon");
-const weatherPlus1hTemp = document.querySelector<HTMLElement>("#weatherPlus1hTemp");
-const weatherPlus1hCondition = document.querySelector<HTMLElement>("#weatherPlus1hCondition");
-const weatherPlus1hWind = document.querySelector<HTMLElement>("#weatherPlus1hWind");
-const weatherPlus1hWindArrow = document.querySelector<HTMLElement>("#weatherPlus1hWindArrow");
-const weatherPlus1hWindDirection = document.querySelector<HTMLElement>("#weatherPlus1hWindDirection");
+const weatherForecastList = document.querySelector<HTMLElement>("#weatherForecastList");
 const weatherUpdatedAt = document.querySelector<HTMLElement>("#weatherUpdatedAt");
 const wakeLockStatus = document.querySelector<HTMLElement>("#wakeLockStatus");
 const wakeLockToggle = document.querySelector<HTMLButtonElement>("#wakeLockToggle");
@@ -497,12 +475,7 @@ if (
   !weatherNowWind ||
   !weatherNowWindArrow ||
   !weatherNowWindDirection ||
-  !weatherPlus1hIcon ||
-  !weatherPlus1hTemp ||
-  !weatherPlus1hCondition ||
-  !weatherPlus1hWind ||
-  !weatherPlus1hWindArrow ||
-  !weatherPlus1hWindDirection ||
+  !weatherForecastList ||
   !weatherUpdatedAt ||
   !wakeLockStatus ||
   !wakeLockToggle ||
@@ -557,12 +530,7 @@ const weatherNowConditionEl = weatherNowCondition;
 const weatherNowWindEl = weatherNowWind;
 const weatherNowWindArrowEl = weatherNowWindArrow;
 const weatherNowWindDirectionEl = weatherNowWindDirection;
-const weatherPlus1hIconEl = weatherPlus1hIcon;
-const weatherPlus1hTempEl = weatherPlus1hTemp;
-const weatherPlus1hConditionEl = weatherPlus1hCondition;
-const weatherPlus1hWindEl = weatherPlus1hWind;
-const weatherPlus1hWindArrowEl = weatherPlus1hWindArrow;
-const weatherPlus1hWindDirectionEl = weatherPlus1hWindDirection;
+const weatherForecastListEl = weatherForecastList;
 const weatherUpdatedAtEl = weatherUpdatedAt;
 const wakeLockStatusEl = wakeLockStatus;
 const wakeLockToggleEl = wakeLockToggle;
@@ -642,6 +610,7 @@ if (geolocateControl) {
 
 let currentMarker: maplibregl.Marker | null = null;
 let currentMarkerElement: HTMLElement | null = null;
+let destinationMarker: maplibregl.Marker | null = null;
 let hasCenteredOnUser = false;
 let lastReading: GpsReading | null = null;
 let lastUsableReading: GpsReading | null = null;
@@ -1130,6 +1099,7 @@ function setPlaceSearchPanelOpen(open: boolean) {
   if (open) {
     selectedPlaceCardEl.hidden = true;
     selectedPlaceState = null;
+    clearDestinationMarker();
     clearSelectedRoute();
     resetPlaceSearchPanel();
     window.setTimeout(() => {
@@ -1193,6 +1163,7 @@ placeSearchCloseEl.addEventListener("click", () => {
 selectedPlaceCloseEl.addEventListener("click", () => {
   selectedPlaceCardEl.hidden = true;
   selectedPlaceState = null;
+  clearDestinationMarker();
   clearSelectedRoute();
 });
 
@@ -1310,6 +1281,31 @@ function centerOnGps(reading: GpsReading) {
     zoom: Math.max(map.getZoom(), 12),
     duration: 650
   });
+}
+
+function setDestinationMarker(coordinate: Coordinate) {
+  const markerElement = document.createElement("div");
+  markerElement.className = "destination-marker";
+  markerElement.innerHTML = '<i class="destination-marker-pin" data-lucide="map-pin" aria-hidden="true"></i>';
+  createIcons({
+    icons: {
+      MapPin
+    },
+    attrs: {
+      "stroke-width": 2.6
+    },
+    root: markerElement
+  });
+
+  destinationMarker?.remove();
+  destinationMarker = new maplibregl.Marker({ element: markerElement, anchor: "bottom" })
+    .setLngLat(coordinate)
+    .addTo(map);
+}
+
+function clearDestinationMarker() {
+  destinationMarker?.remove();
+  destinationMarker = null;
 }
 
 function moveMapToGps(reading: GpsReading, options: { zoom?: number; duration: number }) {
@@ -1638,6 +1634,7 @@ async function searchPlaces() {
   placeSearchResultsState = [];
   selectedPlaceCardEl.hidden = true;
   selectedPlaceState = null;
+  clearDestinationMarker();
   clearSelectedRoute();
   placeSearchResultsEl.hidden = true;
   placeSearchResultsEl.replaceChildren();
@@ -1827,6 +1824,7 @@ function renderSelectedPlace(place: Place) {
     ...place,
     distanceFromUserMeters: getDistanceFromUserMeters(place.coordinates)
   };
+  setDestinationMarker(place.coordinates);
   selectedPlaceCardEl.hidden = false;
   selectedPlaceRouteEl.hidden = false;
   selectedPlaceNameEl.textContent = selectedPlaceState.name;
@@ -1974,8 +1972,15 @@ function startNavigation() {
     setHeadingMapEnabled(true);
   }
 
-  centerOnGps(lastUsableReading);
+  moveMapToNavigationStart(lastUsableReading);
   updateNavigation(lastUsableReading);
+}
+
+function moveMapToNavigationStart(reading: GpsReading) {
+  moveMapToGps(reading, {
+    zoom: Math.max(map.getZoom(), 15),
+    duration: 700
+  });
 }
 
 function quitNavigation() {
@@ -2002,6 +2007,7 @@ function stopNavigation(options: { clearRoute: boolean }) {
   if (options.clearRoute) {
     selectedPlaceCardEl.hidden = true;
     selectedPlaceState = null;
+    clearDestinationMarker();
     activeRouteCoordinates = null;
     activeRouteDestination = null;
     selectedRouteDistanceMeters = null;
@@ -3037,8 +3043,8 @@ function renderWeather() {
     return;
   }
 
-  if (!weatherForecast.plus1h) {
-    setWeatherStatus("+1h indisponible");
+  if (!weatherForecast.forecasts.length) {
+    setWeatherStatus("Prévision indisponible");
     return;
   }
 
@@ -3053,14 +3059,7 @@ function renderWeather() {
     windArrow: weatherNowWindArrowEl,
     windDirection: weatherNowWindDirectionEl
   });
-  renderWeatherSnapshot(weatherForecast.plus1h, {
-    icon: weatherPlus1hIconEl,
-    temp: weatherPlus1hTempEl,
-    condition: weatherPlus1hConditionEl,
-    wind: weatherPlus1hWindEl,
-    windArrow: weatherPlus1hWindArrowEl,
-    windDirection: weatherPlus1hWindDirectionEl
-  });
+  renderWeatherForecasts(weatherForecast.forecasts, weatherForecast.now);
   weatherUpdatedAtEl.textContent = `Màj ${formatTime(weatherForecast.updatedAt)}`;
 }
 
@@ -3084,6 +3083,133 @@ function renderWeatherSnapshot(
   elements.windDirection.textContent = formatWindDirection(snapshot.windDirectionDeg);
   elements.windArrow.style.transform =
     snapshot.windDirectionDeg === null ? "rotate(0deg)" : `rotate(${snapshot.windDirectionDeg}deg)`;
+}
+
+function renderWeatherForecasts(forecasts: WeatherSnapshot[], current: WeatherSnapshot) {
+  weatherForecastListEl.innerHTML = forecasts
+    .map(
+      (snapshot) => {
+        const level = getForecastAlertLevel(current, snapshot);
+        const alertClass =
+          level === "attention"
+            ? " weather-forecast-row-attention"
+            : level === "watch"
+              ? " weather-forecast-row-watch"
+              : "";
+
+        return `
+        <div class="weather-forecast-row${alertClass}">
+          <span class="weather-forecast-time">${snapshot.label}</span>
+          <img class="weather-forecast-icon" src="${getWeatherIconPath(snapshot.weatherCode)}" alt="" />
+          <strong class="weather-forecast-temp">${
+            snapshot.temperatureC === null ? "--" : `${Math.round(snapshot.temperatureC)}°`
+          }</strong>
+          <span class="weather-forecast-condition">${describeWeatherCode(snapshot.weatherCode)}</span>
+          <span class="weather-forecast-wind">${
+            snapshot.windSpeedKmh === null ? "--" : `${Math.round(snapshot.windSpeedKmh)} km/h`
+          }</span>
+          <span class="weather-forecast-direction">
+            <span class="wind-arrow" aria-hidden="true" style="transform: ${
+              snapshot.windDirectionDeg === null ? "rotate(0deg)" : `rotate(${snapshot.windDirectionDeg}deg)`
+            }">↑</span>
+            ${formatWindDirection(snapshot.windDirectionDeg)}
+          </span>
+        </div>
+      `;
+      }
+    )
+    .join("");
+}
+
+function getForecastAlertLevel(current: WeatherSnapshot, forecast: WeatherSnapshot): "stable" | "watch" | "attention" {
+  const windLevel = getWindAlertLevel(current.windSpeedKmh, forecast.windSpeedKmh);
+  const directionLevel = getWindDirectionAlertLevel(current.windDirectionDeg, forecast.windDirectionDeg);
+  const weatherLevel = getWeatherCodeAlertLevel(current.weatherCode, forecast.weatherCode);
+
+  if ([windLevel, directionLevel, weatherLevel].includes("attention")) {
+    return "attention";
+  }
+
+  if ([windLevel, directionLevel, weatherLevel].includes("watch")) {
+    return "watch";
+  }
+
+  return "stable";
+}
+
+function getWindAlertLevel(
+  currentWindKmh: number | null,
+  forecastWindKmh: number | null
+): "stable" | "watch" | "attention" {
+  if (forecastWindKmh === null) {
+    return "stable";
+  }
+
+  const delta = currentWindKmh === null ? 0 : forecastWindKmh - currentWindKmh;
+
+  if (forecastWindKmh >= 30 || delta >= 10) {
+    return "attention";
+  }
+
+  if (forecastWindKmh >= 20 || delta >= 5) {
+    return "watch";
+  }
+
+  return "stable";
+}
+
+function getWindDirectionAlertLevel(
+  currentDirectionDeg: number | null,
+  forecastDirectionDeg: number | null
+): "stable" | "watch" | "attention" {
+  if (currentDirectionDeg === null || forecastDirectionDeg === null) {
+    return "stable";
+  }
+
+  const diff = getAngleDifferenceDegrees(currentDirectionDeg, forecastDirectionDeg);
+
+  if (diff >= 90) {
+    return "attention";
+  }
+
+  if (diff >= 45) {
+    return "watch";
+  }
+
+  return "stable";
+}
+
+function getWeatherCodeAlertLevel(
+  currentCode: number | null,
+  forecastCode: number | null
+): "stable" | "watch" | "attention" {
+  const currentSeverity = getWeatherCodeSeverity(currentCode);
+  const forecastSeverity = getWeatherCodeSeverity(forecastCode);
+
+  if (forecastSeverity >= 3 && forecastSeverity > currentSeverity) {
+    return "attention";
+  }
+
+  if (forecastSeverity >= 2 && forecastSeverity > currentSeverity) {
+    return "watch";
+  }
+
+  return "stable";
+}
+
+function getWeatherCodeSeverity(code: number | null): number {
+  if (code === null) return 0;
+  if ([95, 96, 99].includes(code)) return 3;
+  if ([45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86].includes(code)) {
+    return 2;
+  }
+  if (code === 3) return 1;
+  return 0;
+}
+
+function getAngleDifferenceDegrees(first: number, second: number): number {
+  const diff = Math.abs(first - second) % 360;
+  return diff > 180 ? 360 - diff : diff;
 }
 
 function setWeatherStatus(message: string) {
